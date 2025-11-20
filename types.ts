@@ -13,12 +13,14 @@ export interface AllowanceSettings {
 
 export interface User {
   id: string;
+  familyId: string; // Links user to a specific family group
+  email?: string;   // Only for Parent/Admin account login
   name: string;
   role: UserRole;
   avatarUrl?: string;
   points?: number; // Only for children
   balance?: number; // Only for children (CZK)
-  password?: string; // Optional password for login protection
+  password?: string; // Optional PIN/Password for profile switching
   allowanceSettings?: AllowanceSettings;
 }
 
@@ -33,6 +35,7 @@ export type RecurringFrequency = 'DAILY' | 'WEEKLY';
 
 export interface Task {
   id: string;
+  familyId: string;
   title: string;
   description: string;
   rewardPoints: number;
@@ -58,6 +61,7 @@ export interface RewardHistory {
 
 export interface PayoutRecord {
   id: string;
+  familyId: string;
   childId: string;
   amount: number;
   date: string; // ISO Date string
@@ -65,6 +69,7 @@ export interface PayoutRecord {
 
 export interface Goal {
   id: string;
+  familyId: string;
   childId: string;
   title: string;
   targetAmount: number;

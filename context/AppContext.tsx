@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings } from '../types';
 
 interface AllowanceProgress {
@@ -12,13 +12,21 @@ interface AllowanceProgress {
 }
 
 interface AppContextType {
+  familyId: string | null;
   currentUser: User | null;
   users: User[];
   tasks: Task[];
   payoutHistory: PayoutRecord[];
   goals: Goal[];
-  login: (userId: string) => void;
+  
+  // Auth Methods
+  loginFamily: (email: string, password: string) => Promise<{success: boolean, error?: string}>;
+  registerFamily: (email: string, password: string, familyName: string) => Promise<{success: boolean, error?: string}>;
+  selectProfile: (userId: string) => void;
   logout: () => void;
+  logoutFamily: () => void;
+
+  // Data Methods
   addTask: (task: Task) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus, proofImageUrl?: string, feedback?: string, rewards?: { points: number, money: number }) => void;
   editTask: (taskId: string, updates: Partial<Task>) => void;
@@ -41,78 +49,134 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Mock Data Initialization
-const INITIAL_USERS: User[] = [
-  { id: 'p1', name: 'Maminka', role: UserRole.PARENT, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix' },
-  { id: 'p2', name: 'Tatínek', role: UserRole.PARENT, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka' },
-  { id: 'c1', name: 'Pepíček', role: UserRole.CHILD, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Buddy', points: 150, balance: 200 },
-  { id: 'c2', name: 'Anička', role: UserRole.CHILD, avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Trouble', points: 320, balance: 450 },
-];
-
-const INITIAL_TASKS: Task[] = [
-  {
-    id: 't1',
-    title: 'Uklidit hračky',
-    description: 'Všechny hračky musí být v krabici.',
-    rewardPoints: 20,
-    rewardMoney: 5,
-    assignedToId: 'c1',
-    date: new Date().toISOString().split('T')[0],
-    status: TaskStatus.TODO,
-    createdBy: UserRole.PARENT,
-    isRecurring: true,
-    recurringFrequency: 'DAILY'
-  },
-  {
-    id: 't2',
-    title: 'Vynést koš',
-    description: 'Vynést tříděný odpad.',
-    rewardPoints: 30,
-    rewardMoney: 10,
-    assignedToId: 'c2',
-    date: new Date().toISOString().split('T')[0],
-    status: TaskStatus.PENDING_APPROVAL,
-    proofImageUrl: 'https://images.unsplash.com/photo-1532347922424-00930d2e98e7?w=500&auto=format&fit=crop&q=60',
-    createdBy: UserRole.PARENT
-  }
-];
-
-const INITIAL_PAYOUT_HISTORY: PayoutRecord[] = [
-  { id: 'ph1', childId: 'c1', amount: 50, date: new Date(Date.now() - 86400000 * 2).toISOString() },
-  { id: 'ph2', childId: 'c2', amount: 100, date: new Date(Date.now() - 86400000 * 5).toISOString() },
-];
-
-const INITIAL_GOALS: Goal[] = [
-  { id: 'g1', childId: 'c1', title: 'Nové Lego', targetAmount: 500, imageUrl: 'https://images.unsplash.com/photo-1585366119957-e9730b6d0f60?w=500&auto=format&fit=crop&q=60' },
-  { id: 'g2', childId: 'c2', title: 'Jízdní kolo', targetAmount: 3000, imageUrl: 'https://images.unsplash.com/photo-1485965120184-e224f7a1d784?w=500&auto=format&fit=crop&q=60' }
-];
-
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [users, setUsers] = useState<User[]>(INITIAL_USERS);
+  // Auth State
+  const [familyId, setFamilyId] = useState<string | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
-  const [payoutHistory, setPayoutHistory] = useState<PayoutRecord[]>(INITIAL_PAYOUT_HISTORY);
-  const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
+  
+  // Data State
+  const [users, setUsers] = useState<User[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [payoutHistory, setPayoutHistory] = useState<PayoutRecord[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
 
-  const login = (userId: string) => {
+  // Fetch data ONLY when a family is logged in
+  useEffect(() => {
+    if (!familyId) {
+        setUsers([]);
+        setTasks([]);
+        setPayoutHistory([]);
+        setGoals([]);
+        return;
+    }
+
+    const fetchData = async () => {
+      try {
+        // We pass familyId via headers or query params if needed, 
+        // but ideally the backend session/token handles it. 
+        // For this basic auth, we assume the endpoints return data scoped to the logged-in user/family.
+        const headers = { 'x-family-id': familyId };
+
+        const [usersRes, tasksRes, payoutsRes, goalsRes] = await Promise.all([
+          fetch(`/api/users?familyId=${familyId}`, { headers }),
+          fetch(`/api/tasks?familyId=${familyId}`, { headers }),
+          fetch(`/api/payouts?familyId=${familyId}`, { headers }),
+          fetch(`/api/goals?familyId=${familyId}`, { headers })
+        ]);
+        
+        if (usersRes.ok) setUsers(await usersRes.json());
+        if (tasksRes.ok) setTasks(await tasksRes.json());
+        if (payoutsRes.ok) setPayoutHistory(await payoutsRes.json());
+        if (goalsRes.ok) setGoals(await goalsRes.json());
+      } catch (error) {
+        console.error("Failed to fetch data", error);
+      }
+    };
+    fetchData();
+  }, [familyId]);
+
+  // --- AUTH METHODS ---
+
+  const loginFamily = async (email: string, password: string) => {
+      try {
+          const res = await fetch('/api/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+          });
+          const data = await res.json();
+          
+          if (res.ok && data.familyId) {
+              setFamilyId(data.familyId);
+              // The login endpoint might return users immediately, or we rely on useEffect
+              return { success: true };
+          } else {
+              return { success: false, error: data.error || 'Přihlášení se nezdařilo' };
+          }
+      } catch (e) {
+          return { success: false, error: 'Chyba připojení' };
+      }
+  };
+
+  const registerFamily = async (email: string, password: string, familyName: string) => {
+    try {
+        const res = await fetch('/api/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, familyName })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+            return { success: true };
+        } else {
+            return { success: false, error: data.error || 'Registrace se nezdařila' };
+        }
+    } catch (e) {
+        return { success: false, error: 'Chyba připojení' };
+    }
+  };
+
+  const selectProfile = (userId: string) => {
     const user = users.find(u => u.id === userId);
     if (user) setCurrentUser(user);
   };
 
   const logout = () => {
     setCurrentUser(null);
+    // Keep familyId (return to profile selection)
   };
 
-  const addTask = (task: Task) => {
-    setTasks(prev => [...prev, task]);
+  const logoutFamily = () => {
+      setCurrentUser(null);
+      setFamilyId(null);
   };
 
-  const editTask = (taskId: string, updates: Partial<Task>) => {
+  // --- DATA METHODS (with familyId injection) ---
+
+  const addTask = async (task: Task) => {
+    const taskWithFamily = { ...task, familyId: familyId! };
+    setTasks(prev => [...prev, taskWithFamily]);
+    
+    await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(taskWithFamily)
+    });
+  };
+
+  const editTask = async (taskId: string, updates: Partial<Task>) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+    await fetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
   };
 
-  const deleteTask = (taskId: string) => {
+  const deleteTask = async (taskId: string) => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
+    await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
   };
 
   const calculateNextDate = (currentDate: string, frequency?: RecurringFrequency): string => {
@@ -120,48 +184,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (frequency === 'WEEKLY') {
           date.setDate(date.getDate() + 7);
       } else {
-          // Default to DAILY
           date.setDate(date.getDate() + 1);
       }
       return date.toISOString().split('T')[0];
   };
 
-  const updateTaskStatus = (taskId: string, status: TaskStatus, proofImageUrl?: string, feedback?: string, rewards?: { points: number, money: number }) => {
-    setTasks(prev => {
-        const updatedTasks = prev.map(t => {
-            if (t.id === taskId) {
-                return {
-                    ...t,
-                    status,
-                    ...(proofImageUrl && { proofImageUrl }),
-                    ...(feedback && { feedback }),
-                    ...(rewards && { rewardPoints: rewards.points, rewardMoney: rewards.money })
-                };
-            }
-            return t;
-        });
+  const updateTaskStatus = async (taskId: string, status: TaskStatus, proofImageUrl?: string, feedback?: string, rewards?: { points: number, money: number }) => {
+    const localTask = tasks.find(t => t.id === taskId);
+    
+    const updates: Partial<Task> = {
+        status,
+        ...(proofImageUrl && { proofImageUrl }),
+        ...(feedback && { feedback }),
+        ...(rewards && { rewardPoints: rewards.points, rewardMoney: rewards.money })
+    };
 
-        // Logic to handle Recurring Tasks
-        if (status === TaskStatus.APPROVED) {
-            const completedTask = prev.find(t => t.id === taskId);
-            if (completedTask && completedTask.isRecurring) {
-                // Create next instance of the task
-                const nextDate = calculateNextDate(completedTask.date, completedTask.recurringFrequency);
-                const nextTask: Task = {
-                    ...completedTask,
-                    id: Math.random().toString(36).substr(2, 9),
-                    date: nextDate,
-                    status: TaskStatus.TODO,
-                    proofImageUrl: undefined, // Reset proof
-                    feedback: undefined, // Reset feedback
-                    // Keep recurring settings
-                };
-                return [...updatedTasks, nextTask];
-            }
-        }
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
 
-        return updatedTasks;
+    await fetch(`/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
     });
+
+    // Recurring logic
+    if (status === TaskStatus.APPROVED && localTask && localTask.isRecurring) {
+        const nextDate = calculateNextDate(localTask.date, localTask.recurringFrequency);
+        const nextTask: Task = {
+            ...localTask,
+            id: Math.random().toString(36).substr(2, 9),
+            familyId: familyId!,
+            date: nextDate,
+            status: TaskStatus.TODO,
+            proofImageUrl: undefined,
+            feedback: undefined,
+        };
+        await addTask(nextTask);
+    }
   };
 
   const getChildren = () => {
@@ -176,27 +235,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const addPointsToChild = (childId: string, points: number, money: number) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id === childId) {
-        const updatedUser = {
-          ...u,
-          points: (u.points || 0) + points,
-          balance: (u.balance || 0) + money
-        };
-        // Also update currentUser if it matches to keep UI in sync
-        if (currentUser?.id === childId) {
-            setCurrentUser(updatedUser);
-        }
-        return updatedUser;
-      }
-      return u;
-    }));
+  const addPointsToChild = async (childId: string, points: number, money: number) => {
+    const user = users.find(u => u.id === childId);
+    if (!user) return;
+    
+    const newPoints = (user.points || 0) + points;
+    const newBalance = (user.balance || 0) + money;
+    const updates = { points: newPoints, balance: newBalance };
+    
+    setUsers(prev => prev.map(u => u.id === childId ? { ...u, ...updates } : u));
+    if (currentUser?.id === childId) setCurrentUser({ ...currentUser, ...updates });
+
+    await fetch(`/api/users/${childId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+    });
   };
 
-  const addChild = (name: string) => {
+  const addChild = async (name: string) => {
     const newChild: User = {
       id: Math.random().toString(36).substr(2, 9),
+      familyId: familyId!,
       name,
       role: UserRole.CHILD,
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
@@ -204,95 +264,99 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       balance: 0
     };
     setUsers(prev => [...prev, newChild]);
+    await fetch('/api/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newChild)
+    });
   };
 
-  const updateChild = (id: string, name: string, avatarUrl?: string, password?: string) => {
-    setUsers(prev => prev.map(u => 
-      u.id === id 
-        ? { 
-            ...u, 
-            name, 
-            avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-            ...(password !== undefined && { password }) 
-          } 
-        : u
-    ));
+  const updateChild = async (id: string, name: string, avatarUrl?: string, password?: string) => {
+    const updates: any = { 
+        name, 
+        avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+        ...(password !== undefined && { password }) 
+    };
+
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
+    await fetch(`/api/users/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+    });
   };
 
-  const deleteChild = (id: string) => {
+  const deleteChild = async (id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
+    await fetch(`/api/users/${id}`, { method: 'DELETE' });
   };
 
-  const processPayout = (childId: string) => {
+  const processPayout = async (childId: string) => {
     const child = users.find(u => u.id === childId);
     if (!child || !child.balance || child.balance <= 0) return;
 
     const record: PayoutRecord = {
       id: Math.random().toString(36).substr(2, 9),
+      familyId: familyId!,
       childId,
       amount: child.balance,
       date: new Date().toISOString()
     };
 
     setPayoutHistory(prev => [record, ...prev]);
+    const updatedUser = { ...child, balance: 0 };
+    setUsers(prev => prev.map(u => u.id === childId ? updatedUser : u));
+    if (currentUser?.id === childId) setCurrentUser(updatedUser);
 
-    setUsers(prev => prev.map(u => {
-      if (u.id === childId) {
-        const updatedUser = { ...u, balance: 0 };
-        if (currentUser?.id === childId) {
-            setCurrentUser(updatedUser);
-        }
-        return updatedUser;
-      }
-      return u;
-    }));
+    await fetch('/api/payouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(record)
+    });
+
+    await fetch(`/api/users/${childId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ balance: 0 })
+    });
   };
 
-  const convertPointsToMoney = (childId: string, pointsToConvert: number) => {
+  const convertPointsToMoney = async (childId: string, pointsToConvert: number) => {
     if (pointsToConvert <= 0) return;
-    
-    setUsers(prev => prev.map(u => {
-      if (u.id === childId && (u.points || 0) >= pointsToConvert) {
-        const moneyToAdd = Math.floor(pointsToConvert / 10);
-        const updatedUser = {
-            ...u,
-            points: (u.points || 0) - pointsToConvert,
-            balance: (u.balance || 0) + moneyToAdd
-        };
-        
-        if (currentUser?.id === childId) {
-            setCurrentUser(updatedUser);
-        }
-        return updatedUser;
-      }
-      return u;
-    }));
+    const user = users.find(u => u.id === childId);
+    if (!user || (user.points || 0) < pointsToConvert) return;
+
+    const moneyToAdd = Math.floor(pointsToConvert / 10);
+    const newPoints = (user.points || 0) - pointsToConvert;
+    const newBalance = (user.balance || 0) + moneyToAdd;
+    const updates = { points: newPoints, balance: newBalance };
+
+    setUsers(prev => prev.map(u => u.id === childId ? { ...u, ...updates } : u));
+    if (currentUser?.id === childId) setCurrentUser({ ...currentUser, ...updates });
+
+    await fetch(`/api/users/${childId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+    });
   };
 
-  const setUserPassword = (userId: string, password: string) => {
-    setUsers(prev => prev.map(u => {
-        if (u.id === userId) {
-            const updatedUser = { ...u, password };
-            if (currentUser?.id === userId) {
-                setCurrentUser(updatedUser);
-            }
-            return updatedUser;
-        }
-        return u;
-    }));
+  const setUserPassword = async (userId: string, password: string) => {
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, password } : u));
+    await fetch(`/api/users/${userId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+    });
   };
 
-  const setChildAllowance = (childId: string, settings?: AllowanceSettings) => {
-    setUsers(prev => prev.map(u => {
-        if (u.id === childId) {
-            const updatedUser = { ...u, allowanceSettings: settings };
-            if (currentUser?.id === childId) {
-                setCurrentUser(updatedUser);
-            }
-            return updatedUser;
-        }
-        return u;
-    }));
+  const setChildAllowance = async (childId: string, settings?: AllowanceSettings) => {
+    setUsers(prev => prev.map(u => u.id === childId ? { ...u, allowanceSettings: settings } : u));
+    await fetch(`/api/users/${childId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ allowanceSettings: settings })
+    });
   };
 
   const getAllowanceProgress = (childId: string): AllowanceProgress | null => {
@@ -306,34 +370,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     let periodStartDate = new Date();
 
     if (frequency === 'MONTHLY') {
-        // Monthly logic
         nextPaymentDate.setDate(day);
-        // If day is passed in current month, next payment is next month
         if (nextPaymentDate <= now) {
             nextPaymentDate.setMonth(nextPaymentDate.getMonth() + 1);
-        } else {
-            // If today is before the pay day, check if we are still in the previous period or current
-            // Assuming just setting to 'day' of current month is the target
         }
-        
         periodStartDate = new Date(nextPaymentDate);
         periodStartDate.setMonth(periodStartDate.getMonth() - 1);
     } else {
-        // Weekly logic
-        // day 1-7 (1=Mon, 7=Sun)
         const currentDay = now.getDay() || 7; 
         let daysUntil = day - currentDay;
         if (daysUntil <= 0) daysUntil += 7;
         
         nextPaymentDate.setDate(now.getDate() + daysUntil);
-        
         periodStartDate = new Date(nextPaymentDate);
         periodStartDate.setDate(periodStartDate.getDate() - 7);
     }
 
     const periodStartStr = periodStartDate.toISOString().split('T')[0];
     
-    // Sum points earned from tasks approved since period start
     const earnedPoints = tasks
         .filter(t => 
             t.assignedToId === childId && 
@@ -356,27 +410,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   };
 
-  const addGoal = (goal: Goal) => {
-    setGoals(prev => [...prev, goal]);
+  const addGoal = async (goal: Goal) => {
+    const goalWithFamily = { ...goal, familyId: familyId! };
+    setGoals(prev => [...prev, goalWithFamily]);
+    await fetch('/api/goals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(goalWithFamily)
+    });
   };
 
-  const updateGoal = (id: string, updates: Partial<Goal>) => {
+  const updateGoal = async (id: string, updates: Partial<Goal>) => {
     setGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
+    await fetch(`/api/goals/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+    });
   };
 
-  const deleteGoal = (id: string) => {
+  const deleteGoal = async (id: string) => {
     setGoals(prev => prev.filter(g => g.id !== id));
+    await fetch(`/api/goals/${id}`, { method: 'DELETE' });
   };
 
   return (
     <AppContext.Provider value={{
+      familyId,
       currentUser,
       users,
       tasks,
       payoutHistory,
       goals,
-      login,
+      loginFamily,
+      registerFamily,
+      selectProfile,
       logout,
+      logoutFamily,
       addTask,
       updateTaskStatus,
       editTask,

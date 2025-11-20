@@ -104,6 +104,7 @@ const ChildDashboard: React.FC = () => {
 
       const newTask: Task = {
           id: Math.random().toString(36).substr(2, 9),
+          familyId: currentUser.familyId,
           title: customTaskTitle,
           description: customTaskDesc,
           rewardPoints: 0, // Will be set by parent
@@ -193,6 +194,7 @@ const ChildDashboard: React.FC = () => {
           // Create new
           const newGoal: Goal = {
               id: Math.random().toString(36).substr(2, 9),
+              familyId: currentUser.familyId,
               childId: currentUser.id,
               title: newGoalTitle,
               targetAmount: Number(newGoalAmount),
