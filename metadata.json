@@ -1,0 +1,7 @@
+{
+  "name": "Úkolníček",
+  "description": "Motivační aplikace pro děti a rodiče, která mění domácí povinnosti v zábavu a odměny.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
