@@ -19,7 +19,8 @@
     "express": "^5.1.0",
     "dotenv": "^17.2.3",
     "cors": "^2.8.5",
-    "mysql2": "^3.15.3"
+    "mysql2": "^3.15.3",
+    "@supabase/supabase-js": "^2.39.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

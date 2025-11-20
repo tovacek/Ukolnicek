@@ -1,6 +1,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings } from '../types';
+import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
   totalAmount: number;
@@ -49,6 +50,84 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+// --- DB MAPPERS ---
+const mapUserFromDb = (u: any): User => ({
+  id: u.id,
+  familyId: u.family_id,
+  email: u.email,
+  name: u.name,
+  role: u.role as UserRole,
+  avatarUrl: u.avatar_url,
+  points: u.points,
+  balance: u.balance,
+  password: u.password,
+  allowanceSettings: u.allowance_settings
+});
+
+const mapUserToDb = (u: User) => ({
+  id: u.id,
+  family_id: u.familyId,
+  email: u.email,
+  name: u.name,
+  role: u.role,
+  avatar_url: u.avatarUrl,
+  points: u.points,
+  balance: u.balance,
+  password: u.password,
+  allowance_settings: u.allowanceSettings
+});
+
+const mapTaskFromDb = (t: any): Task => ({
+  id: t.id,
+  familyId: t.family_id,
+  title: t.title,
+  description: t.description,
+  rewardPoints: t.reward_points,
+  rewardMoney: t.reward_money,
+  assignedToId: t.assigned_to_id,
+  date: t.date,
+  status: t.status as TaskStatus,
+  proofImageUrl: t.proof_image_url,
+  feedback: t.feedback,
+  createdBy: t.created_by as UserRole,
+  isRecurring: t.is_recurring,
+  recurringFrequency: t.recurring_frequency
+});
+
+const mapTaskToDb = (t: Task) => ({
+  id: t.id,
+  family_id: t.familyId,
+  title: t.title,
+  description: t.description,
+  reward_points: t.rewardPoints,
+  reward_money: t.rewardMoney,
+  assigned_to_id: t.assignedToId,
+  date: t.date,
+  status: t.status,
+  proof_image_url: t.proofImageUrl,
+  feedback: t.feedback,
+  created_by: t.createdBy,
+  is_recurring: t.isRecurring,
+  recurring_frequency: t.recurringFrequency
+});
+
+const mapPayoutFromDb = (p: any): PayoutRecord => ({
+  id: p.id,
+  familyId: p.family_id,
+  childId: p.child_id,
+  amount: p.amount,
+  date: p.date
+});
+
+const mapGoalFromDb = (g: any): Goal => ({
+  id: g.id,
+  familyId: g.family_id,
+  childId: g.child_id,
+  title: g.title,
+  targetAmount: g.target_amount,
+  imageUrl: g.image_url
+});
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Auth State
   const [familyId, setFamilyId] = useState<string | null>(null);
@@ -72,22 +151,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     const fetchData = async () => {
       try {
-        // We pass familyId via headers or query params if needed, 
-        // but ideally the backend session/token handles it. 
-        // For this basic auth, we assume the endpoints return data scoped to the logged-in user/family.
-        const headers = { 'x-family-id': familyId };
+        const { data: usersData } = await supabase.from('users').select('*').eq('family_id', familyId);
+        if (usersData) setUsers(usersData.map(mapUserFromDb));
 
-        const [usersRes, tasksRes, payoutsRes, goalsRes] = await Promise.all([
-          fetch(`/api/users?familyId=${familyId}`, { headers }),
-          fetch(`/api/tasks?familyId=${familyId}`, { headers }),
-          fetch(`/api/payouts?familyId=${familyId}`, { headers }),
-          fetch(`/api/goals?familyId=${familyId}`, { headers })
-        ]);
-        
-        if (usersRes.ok) setUsers(await usersRes.json());
-        if (tasksRes.ok) setTasks(await tasksRes.json());
-        if (payoutsRes.ok) setPayoutHistory(await payoutsRes.json());
-        if (goalsRes.ok) setGoals(await goalsRes.json());
+        const { data: tasksData } = await supabase.from('tasks').select('*').eq('family_id', familyId);
+        if (tasksData) setTasks(tasksData.map(mapTaskFromDb));
+
+        const { data: payoutsData } = await supabase.from('payout_history').select('*').eq('family_id', familyId).order('date', { ascending: false });
+        if (payoutsData) setPayoutHistory(payoutsData.map(mapPayoutFromDb));
+
+        const { data: goalsData } = await supabase.from('goals').select('*').eq('family_id', familyId);
+        if (goalsData) setGoals(goalsData.map(mapGoalFromDb));
+
       } catch (error) {
         console.error("Failed to fetch data", error);
       }
@@ -99,19 +174,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loginFamily = async (email: string, password: string) => {
       try {
-          const res = await fetch('/api/login', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email, password })
-          });
-          const data = await res.json();
-          
-          if (res.ok && data.familyId) {
-              setFamilyId(data.familyId);
-              // The login endpoint might return users immediately, or we rely on useEffect
+          const { data, error } = await supabase
+            .from('users')
+            .select('family_id')
+            .eq('email', email)
+            .eq('password', password)
+            .eq('role', UserRole.PARENT)
+            .maybeSingle();
+
+          if (data && !error) {
+              setFamilyId(data.family_id);
               return { success: true };
           } else {
-              return { success: false, error: data.error || 'Přihlášení se nezdařilo' };
+              return { success: false, error: 'Nesprávný email nebo heslo.' };
           }
       } catch (e) {
           return { success: false, error: 'Chyba připojení' };
@@ -120,17 +195,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const registerFamily = async (email: string, password: string, familyName: string) => {
     try {
-        const res = await fetch('/api/register', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, familyName })
-        });
-        const data = await res.json();
+        // Check if email exists
+        const { data: existing } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
+        if (existing) return { success: false, error: 'Email již existuje.' };
+
+        const familyId = Math.random().toString(36).substr(2, 9);
+        const parentId = Math.random().toString(36).substr(2, 9);
+
+        const newParent: User = {
+            id: parentId,
+            familyId,
+            email,
+            name: familyName || 'Rodič',
+            role: UserRole.PARENT,
+            password,
+            avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${parentId}`
+        };
+
+        const { error } = await supabase.from('users').insert(mapUserToDb(newParent));
         
-        if (res.ok) {
+        if (!error) {
             return { success: true };
         } else {
-            return { success: false, error: data.error || 'Registrace se nezdařila' };
+            return { success: false, error: error.message || 'Registrace se nezdařila' };
         }
     } catch (e) {
         return { success: false, error: 'Chyba připojení' };
@@ -144,7 +231,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const logout = () => {
     setCurrentUser(null);
-    // Keep familyId (return to profile selection)
   };
 
   const logoutFamily = () => {
@@ -152,31 +238,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setFamilyId(null);
   };
 
-  // --- DATA METHODS (with familyId injection) ---
+  // --- DATA METHODS ---
 
   const addTask = async (task: Task) => {
     const taskWithFamily = { ...task, familyId: familyId! };
     setTasks(prev => [...prev, taskWithFamily]);
-    
-    await fetch('/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(taskWithFamily)
-    });
+    await supabase.from('tasks').insert(mapTaskToDb(taskWithFamily));
   };
 
   const editTask = async (taskId: string, updates: Partial<Task>) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
-    await fetch(`/api/tasks/${taskId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    });
+    
+    // Map partial updates is tricky, assume we map manual keys or full object re-map
+    // Simplified:
+    const dbUpdates: any = {};
+    if (updates.title !== undefined) dbUpdates.title = updates.title;
+    if (updates.description !== undefined) dbUpdates.description = updates.description;
+    if (updates.rewardPoints !== undefined) dbUpdates.reward_points = updates.rewardPoints;
+    if (updates.rewardMoney !== undefined) dbUpdates.reward_money = updates.rewardMoney;
+    if (updates.assignedToId !== undefined) dbUpdates.assigned_to_id = updates.assignedToId;
+    if (updates.date !== undefined) dbUpdates.date = updates.date;
+    if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
+    if (updates.recurringFrequency !== undefined) dbUpdates.recurring_frequency = updates.recurringFrequency;
+
+    await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
   };
 
   const deleteTask = async (taskId: string) => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
-    await fetch(`/api/tasks/${taskId}`, { method: 'DELETE' });
+    await supabase.from('tasks').delete().eq('id', taskId);
   };
 
   const calculateNextDate = (currentDate: string, frequency?: RecurringFrequency): string => {
@@ -201,11 +291,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
 
-    await fetch(`/api/tasks/${taskId}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates)
-    });
+    const dbUpdates: any = { status };
+    if (proofImageUrl) dbUpdates.proof_image_url = proofImageUrl;
+    if (feedback) dbUpdates.feedback = feedback;
+    if (rewards) {
+        dbUpdates.reward_points = rewards.points;
+        dbUpdates.reward_money = rewards.money;
+    }
+
+    await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
 
     // Recurring logic
     if (status === TaskStatus.APPROVED && localTask && localTask.isRecurring) {
@@ -246,11 +340,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev => prev.map(u => u.id === childId ? { ...u, ...updates } : u));
     if (currentUser?.id === childId) setCurrentUser({ ...currentUser, ...updates });
 
-    await fetch(`/api/users/${childId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-    });
+    await supabase.from('users').update(updates).eq('id', childId);
   };
 
   const addChild = async (name: string) => {
@@ -264,11 +354,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       balance: 0
     };
     setUsers(prev => [...prev, newChild]);
-    await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newChild)
-    });
+    await supabase.from('users').insert(mapUserToDb(newChild));
   };
 
   const updateChild = async (id: string, name: string, avatarUrl?: string, password?: string) => {
@@ -279,16 +365,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
-    await fetch(`/api/users/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-    });
+    
+    const dbUpdates: any = { name, avatar_url: updates.avatarUrl };
+    if (password !== undefined) dbUpdates.password = password;
+
+    await supabase.from('users').update(dbUpdates).eq('id', id);
   };
 
   const deleteChild = async (id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
-    await fetch(`/api/users/${id}`, { method: 'DELETE' });
+    await supabase.from('users').delete().eq('id', id);
   };
 
   const processPayout = async (childId: string) => {
@@ -308,17 +394,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev => prev.map(u => u.id === childId ? updatedUser : u));
     if (currentUser?.id === childId) setCurrentUser(updatedUser);
 
-    await fetch('/api/payouts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(record)
-    });
+    await supabase.from('payout_history').insert(mapPayoutFromDb({
+        id: record.id,
+        family_id: record.familyId,
+        child_id: record.childId,
+        amount: record.amount,
+        date: record.date
+    }));
 
-    await fetch(`/api/users/${childId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ balance: 0 })
-    });
+    await supabase.from('users').update({ balance: 0 }).eq('id', childId);
   };
 
   const convertPointsToMoney = async (childId: string, pointsToConvert: number) => {
@@ -334,29 +418,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev => prev.map(u => u.id === childId ? { ...u, ...updates } : u));
     if (currentUser?.id === childId) setCurrentUser({ ...currentUser, ...updates });
 
-    await fetch(`/api/users/${childId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-    });
+    await supabase.from('users').update(updates).eq('id', childId);
   };
 
   const setUserPassword = async (userId: string, password: string) => {
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, password } : u));
-    await fetch(`/api/users/${userId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password })
-    });
+    await supabase.from('users').update({ password }).eq('id', userId);
   };
 
   const setChildAllowance = async (childId: string, settings?: AllowanceSettings) => {
     setUsers(prev => prev.map(u => u.id === childId ? { ...u, allowanceSettings: settings } : u));
-    await fetch(`/api/users/${childId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ allowanceSettings: settings })
-    });
+    await supabase.from('users').update({ allowance_settings: settings }).eq('id', childId);
   };
 
   const getAllowanceProgress = (childId: string): AllowanceProgress | null => {
@@ -413,25 +485,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addGoal = async (goal: Goal) => {
     const goalWithFamily = { ...goal, familyId: familyId! };
     setGoals(prev => [...prev, goalWithFamily]);
-    await fetch('/api/goals', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(goalWithFamily)
+    
+    await supabase.from('goals').insert({
+        id: goalWithFamily.id,
+        family_id: goalWithFamily.familyId,
+        child_id: goalWithFamily.childId,
+        title: goalWithFamily.title,
+        target_amount: goalWithFamily.targetAmount,
+        image_url: goalWithFamily.imageUrl
     });
   };
 
   const updateGoal = async (id: string, updates: Partial<Goal>) => {
     setGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
-    await fetch(`/api/goals/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
-    });
+    
+    const dbUpdates: any = {};
+    if (updates.title) dbUpdates.title = updates.title;
+    if (updates.targetAmount) dbUpdates.target_amount = updates.targetAmount;
+    if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
+
+    await supabase.from('goals').update(dbUpdates).eq('id', id);
   };
 
   const deleteGoal = async (id: string) => {
     setGoals(prev => prev.filter(g => g.id !== id));
-    await fetch(`/api/goals/${id}`, { method: 'DELETE' });
+    await supabase.from('goals').delete().eq('id', id);
   };
 
   return (
