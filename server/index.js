@@ -11,31 +11,105 @@ app.use(cors());
 app.use(express.json());
 
 // Database connection configuration
-const pool = mysql.createPool({
+const dbConfig = {
   host: process.env.DB_HOST || 'sql.dimzone.cz',
   user: process.env.DB_USER || 'tvacek',
   password: process.env.DB_PASSWORD || 'AdminBarsys',
-  // Assuming the database name matches the username on this hosting, 
-  // or use 'ukolnicek' if you created it manually.
   database: process.env.DB_NAME || 'tvacek', 
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  // Ensure dates are returned as strings/JS Date objects correctly
-  dateStrings: true 
-});
+  dateStrings: true,
+  // Add timeouts to fail faster if network is blocked
+  connectTimeout: 10000, 
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
+};
+
+const pool = mysql.createPool(dbConfig);
+
+// --- CONNECTION TEST ---
+// This runs immediately when server starts to verify DB access
+(async () => {
+    try {
+        const connection = await pool.getConnection();
+        console.log('✅ ÚSPĚŠNĚ PŘIPOJENO K DATABÁZI:', dbConfig.host);
+        connection.release();
+    } catch (err) {
+        console.error('❌ CHYBA PŘIPOJENÍ K DATABÁZI:');
+        console.error('   Zpráva:', err.message);
+        console.error('   Kód:', err.code);
+        console.error('---');
+        console.error('TIP: Zkontrolujte, zda máte na hostingu povolen "Vzdálený přístup (Remote MySQL)" pro vaši IP adresu.');
+        console.error('TIP: Ověřte správnost hesla a názvu databáze.');
+    }
+})();
 
 // --- Helpers ---
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+// --- AUTHENTICATION MIDDLEWARE ---
+// Middleware to get familyId from headers
+const getFamilyId = (req) => {
+    // In a real app, you would verify a JWT token here.
+    // For this demo, we trust the header sent by the frontend.
+    return req.headers['x-family-id'];
+};
+
+// --- AUTH ENDPOINTS ---
+
+app.post('/api/register', async (req, res) => {
+    const { email, password, familyName } = req.body;
+    const familyId = generateId();
+    const parentId = generateId();
+
+    const newParent = {
+        id: parentId,
+        familyId,
+        email,
+        name: familyName || 'Rodič', // Default name, user can change later
+        role: 'PARENT',
+        password, // In production, this MUST be hashed (e.g., bcrypt)
+        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${parentId}`
+    };
+
+    try {
+        await pool.query('INSERT INTO users SET ?', [newParent]);
+        res.json({ success: true, familyId });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Registrace se nezdařila (email pravděpodobně existuje).' });
+    }
+});
+
+app.post('/api/login', async (req, res) => {
+    const { email, password } = req.body;
+    
+    try {
+        const [rows] = await pool.query('SELECT * FROM users WHERE email = ? AND password = ? AND role = "PARENT"', [email, password]);
+        
+        if (rows.length > 0) {
+            const user = rows[0];
+            res.json({ success: true, familyId: user.familyId });
+        } else {
+            res.status(401).json({ error: 'Nesprávný email nebo heslo.' });
+        }
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+
 // --- USERS ---
 app.get('/api/users', async (req, res) => {
+  const familyId = getFamilyId(req);
+  if (!familyId) return res.status(403).json({ error: 'Missing family ID' });
+
   try {
-    const [rows] = await pool.query('SELECT * FROM users');
+    const [rows] = await pool.query('SELECT * FROM users WHERE familyId = ?', [familyId]);
     const users = rows.map(u => ({
       ...u,
-      // Handle boolean conversion from TINYINT
-      // Handle JSON parsing for settings
       allowanceSettings: u.allowanceSettings ? (typeof u.allowanceSettings === 'string' ? JSON.parse(u.allowanceSettings) : u.allowanceSettings) : undefined
     }));
     res.json(users);
@@ -46,8 +120,11 @@ app.get('/api/users', async (req, res) => {
 });
 
 app.post('/api/users', async (req, res) => {
+  // Assume familyId comes in body for creation or inferred from context
+  // For adding a child, we rely on the logged-in parent's context usually, 
+  // but here we passed familyId in the body from AppContext.
   const user = { ...req.body, id: req.body.id || generateId() };
-  // Ensure allowanceSettings is stringified for storage
+  
   const dbUser = {
       ...user,
       allowanceSettings: user.allowanceSettings ? JSON.stringify(user.allowanceSettings) : null
@@ -88,12 +165,14 @@ app.delete('/api/users/:id', async (req, res) => {
 
 // --- TASKS ---
 app.get('/api/tasks', async (req, res) => {
+  const familyId = getFamilyId(req);
+  if (!familyId) return res.status(403).json({ error: 'Missing family ID' });
+
   try {
-    const [rows] = await pool.query('SELECT * FROM tasks');
+    const [rows] = await pool.query('SELECT * FROM tasks WHERE familyId = ?', [familyId]);
     const tasks = rows.map(t => ({ 
         ...t, 
         isRecurring: !!t.isRecurring,
-        // Ensure date comes back as YYYY-MM-DD string
         date: typeof t.date === 'string' ? t.date.split('T')[0] : new Date(t.date).toISOString().split('T')[0]
     }));
     res.json(tasks);
@@ -104,7 +183,6 @@ app.get('/api/tasks', async (req, res) => {
 
 app.post('/api/tasks', async (req, res) => {
   const task = { ...req.body, id: req.body.id || generateId() };
-  // Convert boolean to tinyint for MySQL if needed, though mysql2 usually handles it
   const dbTask = {
       ...task,
       isRecurring: task.isRecurring ? 1 : 0
@@ -143,8 +221,11 @@ app.delete('/api/tasks/:id', async (req, res) => {
 
 // --- PAYOUTS ---
 app.get('/api/payouts', async (req, res) => {
+  const familyId = getFamilyId(req);
+  if (!familyId) return res.status(403).json({ error: 'Missing family ID' });
+
   try {
-    const [rows] = await pool.query('SELECT * FROM payout_history ORDER BY date DESC');
+    const [rows] = await pool.query('SELECT * FROM payout_history WHERE familyId = ? ORDER BY date DESC', [familyId]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -163,8 +244,11 @@ app.post('/api/payouts', async (req, res) => {
 
 // --- GOALS ---
 app.get('/api/goals', async (req, res) => {
+  const familyId = getFamilyId(req);
+  if (!familyId) return res.status(403).json({ error: 'Missing family ID' });
+
   try {
-    const [rows] = await pool.query('SELECT * FROM goals');
+    const [rows] = await pool.query('SELECT * FROM goals WHERE familyId = ?', [familyId]);
     res.json(rows);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -202,5 +286,4 @@ app.delete('/api/goals/:id', async (req, res) => {
 const PORT = 3001;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
-  console.log('Connected to database at sql.dimzone.cz');
 });
