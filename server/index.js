@@ -1,4 +1,3 @@
-
 import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
@@ -20,7 +19,6 @@ const dbConfig = {
   connectionLimit: 10,
   queueLimit: 0,
   dateStrings: true,
-  // Add timeouts to fail faster if network is blocked
   connectTimeout: 10000, 
   enableKeepAlive: true,
   keepAliveInitialDelay: 0
@@ -28,31 +26,24 @@ const dbConfig = {
 
 const pool = mysql.createPool(dbConfig);
 
-// --- CONNECTION TEST ---
-// This runs immediately when server starts to verify DB access
-(async () => {
-    try {
-        const connection = await pool.getConnection();
-        console.log('✅ ÚSPĚŠNĚ PŘIPOJENO K DATABÁZI:', dbConfig.host);
-        connection.release();
-    } catch (err) {
-        console.error('❌ CHYBA PŘIPOJENÍ K DATABÁZI:');
-        console.error('   Zpráva:', err.message);
-        console.error('   Kód:', err.code);
-        console.error('---');
-        console.error('TIP: Zkontrolujte, zda máte na hostingu povolen "Vzdálený přístup (Remote MySQL)" pro vaši IP adresu.');
-        console.error('TIP: Ověřte správnost hesla a názvu databáze.');
-    }
-})();
+// --- CONNECTION TEST (Local Only) ---
+if (!process.env.VERCEL) {
+    (async () => {
+        try {
+            const connection = await pool.getConnection();
+            console.log('✅ ÚSPĚŠNĚ PŘIPOJENO K DATABÁZI:', dbConfig.host);
+            connection.release();
+        } catch (err) {
+            console.error('❌ CHYBA PŘIPOJENÍ K DATABÁZI:', err.message);
+        }
+    })();
+}
 
 // --- Helpers ---
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
 // --- AUTHENTICATION MIDDLEWARE ---
-// Middleware to get familyId from headers
 const getFamilyId = (req) => {
-    // In a real app, you would verify a JWT token here.
-    // For this demo, we trust the header sent by the frontend.
     return req.headers['x-family-id'];
 };
 
@@ -67,9 +58,9 @@ app.post('/api/register', async (req, res) => {
         id: parentId,
         familyId,
         email,
-        name: familyName || 'Rodič', // Default name, user can change later
+        name: familyName || 'Rodič', 
         role: 'PARENT',
-        password, // In production, this MUST be hashed (e.g., bcrypt)
+        password,
         avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${parentId}`
     };
 
@@ -120,9 +111,6 @@ app.get('/api/users', async (req, res) => {
 });
 
 app.post('/api/users', async (req, res) => {
-  // Assume familyId comes in body for creation or inferred from context
-  // For adding a child, we rely on the logged-in parent's context usually, 
-  // but here we passed familyId in the body from AppContext.
   const user = { ...req.body, id: req.body.id || generateId() };
   
   const dbUser = {
@@ -283,7 +271,14 @@ app.delete('/api/goals/:id', async (req, res) => {
   }
 });
 
-const PORT = 3001;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// For Vercel, we MUST export the app
+export default app;
+
+// For Local Dev, we listen on a port
+// process.env.VERCEL is set by Vercel environment
+if (!process.env.VERCEL) {
+  const PORT = 3001;
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
