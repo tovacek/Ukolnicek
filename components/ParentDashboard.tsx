@@ -28,7 +28,8 @@ import {
   Repeat,
   PiggyBank,
   Calendar,
-  Clock
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -52,11 +53,13 @@ const ParentDashboard: React.FC = () => {
     processPayout,
     payoutHistory,
     setUserPassword,
-    setChildAllowance
+    setChildAllowance,
+    refreshData
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'approve' | 'settings'>('overview');
   const [selectedChildId, setSelectedChildId] = useState<string>(getChildren()[0]?.id || '');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Smart Task Generator State
   const [isGenerating, setIsGenerating] = useState(false);
@@ -127,6 +130,12 @@ const ParentDashboard: React.FC = () => {
 
   const getTotalPayout = () => {
     return payoutHistory.reduce((acc, curr) => acc + curr.amount, 0);
+  };
+
+  const handleRefresh = async () => {
+      setIsRefreshing(true);
+      await refreshData();
+      setTimeout(() => setIsRefreshing(false), 500);
   };
 
   const initiateApproval = (task: Task) => {
@@ -354,9 +363,14 @@ const ParentDashboard: React.FC = () => {
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
       {/* Sidebar Navigation */}
       <aside className="w-full md:w-64 bg-slate-900 text-white flex-shrink-0">
-        <div className="p-6">
-          <h1 className="text-2xl font-display font-bold tracking-wide text-white">Úkolníček<span className="text-indigo-400">.admin</span></h1>
-          <p className="text-slate-400 text-sm mt-1">Rodičovská zóna</p>
+        <div className="p-6 flex justify-between items-center">
+          <div>
+            <h1 className="text-2xl font-display font-bold tracking-wide text-white">Úkolníček<span className="text-indigo-400">.admin</span></h1>
+            <p className="text-slate-400 text-sm mt-1">Rodičovská zóna</p>
+          </div>
+          <button onClick={handleRefresh} className={`p-2 bg-slate-800 rounded-full hover:bg-slate-700 ${isRefreshing ? 'animate-spin' : ''}`} title="Aktualizovat data">
+              <RefreshCw size={16}/>
+          </button>
         </div>
         <nav className="flex flex-row md:flex-col overflow-x-auto md:overflow-visible">
           <button 

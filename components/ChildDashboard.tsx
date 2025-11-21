@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { TaskStatus, Task, UserRole, Goal } from '../types';
-import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank } from 'lucide-react';
+import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 
 const ChildDashboard: React.FC = () => {
-  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, setUserPassword, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask } = useApp();
+  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, setUserPassword, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData } = useApp();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -16,6 +16,7 @@ const ChildDashboard: React.FC = () => {
   // UI State
   const [activeTab, setActiveTab] = useState<'todo' | 'done'>('todo');
   const [showCelebration, setShowCelebration] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   
   // Exchange Modal State
   const [showExchange, setShowExchange] = useState(false);
@@ -72,6 +73,12 @@ const ChildDashboard: React.FC = () => {
        generateMotivationalMessage(currentUser.name, completedTasks.length).then(setMotivation);
     }
   }, [currentUser, completedTasks.length]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshData();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
 
   // Trigger celebration
   const triggerCelebration = () => {
@@ -275,6 +282,9 @@ const ChildDashboard: React.FC = () => {
              </div>
           </div>
           <div className="flex gap-2">
+            <button onClick={handleRefresh} className={`p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-blue-50 hover:text-brand-blue transition-colors ${isRefreshing ? 'animate-spin' : ''}`}>
+                <RefreshCw size={20} />
+            </button>
             <button onClick={() => setShowSettings(true)} className="p-2 bg-gray-100 rounded-full text-gray-500 hover:bg-blue-50 hover:text-brand-blue transition-colors">
                 <Settings size={20} />
             </button>

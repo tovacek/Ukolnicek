@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings } from '../types';
 import { supabase } from '../services/supabaseClient';
 
@@ -28,6 +28,7 @@ interface AppContextType {
   logoutFamily: () => void;
 
   // Data Methods
+  refreshData: () => Promise<void>;
   addTask: (task: Task) => void;
   updateTaskStatus: (taskId: string, status: TaskStatus, proofImageUrl?: string, feedback?: string, rewards?: { points: number, money: number }) => void;
   editTask: (taskId: string, updates: Partial<Task>) => void;
@@ -139,8 +140,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [payoutHistory, setPayoutHistory] = useState<PayoutRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
 
-  // Fetch data ONLY when a family is logged in
+  // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
+      const storedFamilyId = localStorage.getItem('ukolnicek_family_id');
+      if (storedFamilyId) {
+          setFamilyId(storedFamilyId);
+      }
+  }, []);
+
+  // Restore Current User once Users are loaded
+  useEffect(() => {
+      const storedUserId = localStorage.getItem('ukolnicek_user_id');
+      if (storedUserId && users.length > 0 && !currentUser) {
+          const user = users.find(u => u.id === storedUserId);
+          if (user) setCurrentUser(user);
+      }
+  }, [users]);
+
+  // --- FETCH DATA ---
+  const fetchData = useCallback(async () => {
     if (!familyId) {
         setUsers([]);
         setTasks([]);
@@ -149,26 +167,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return;
     }
 
-    const fetchData = async () => {
-      try {
-        const { data: usersData } = await supabase.from('users').select('*').eq('family_id', familyId);
-        if (usersData) setUsers(usersData.map(mapUserFromDb));
-
-        const { data: tasksData } = await supabase.from('tasks').select('*').eq('family_id', familyId);
-        if (tasksData) setTasks(tasksData.map(mapTaskFromDb));
-
-        const { data: payoutsData } = await supabase.from('payout_history').select('*').eq('family_id', familyId).order('date', { ascending: false });
-        if (payoutsData) setPayoutHistory(payoutsData.map(mapPayoutFromDb));
-
-        const { data: goalsData } = await supabase.from('goals').select('*').eq('family_id', familyId);
-        if (goalsData) setGoals(goalsData.map(mapGoalFromDb));
-
-      } catch (error) {
-        console.error("Failed to fetch data", error);
+    try {
+      const { data: usersData } = await supabase.from('users').select('*').eq('family_id', familyId);
+      if (usersData) {
+          const mappedUsers = usersData.map(mapUserFromDb);
+          setUsers(mappedUsers);
+          // Refresh current user data if logged in
+          if (currentUser) {
+              const updatedCurrent = mappedUsers.find(u => u.id === currentUser.id);
+              if (updatedCurrent) setCurrentUser(updatedCurrent);
+          }
       }
-    };
+
+      const { data: tasksData } = await supabase.from('tasks').select('*').eq('family_id', familyId);
+      if (tasksData) setTasks(tasksData.map(mapTaskFromDb));
+
+      const { data: payoutsData } = await supabase.from('payout_history').select('*').eq('family_id', familyId).order('date', { ascending: false });
+      if (payoutsData) setPayoutHistory(payoutsData.map(mapPayoutFromDb));
+
+      const { data: goalsData } = await supabase.from('goals').select('*').eq('family_id', familyId);
+      if (goalsData) setGoals(goalsData.map(mapGoalFromDb));
+
+    } catch (error) {
+      console.error("Failed to fetch data", error);
+    }
+  }, [familyId, currentUser?.id]);
+
+  // Fetch on mount/login
+  useEffect(() => {
     fetchData();
-  }, [familyId]);
+  }, [fetchData]);
 
   // --- AUTH METHODS ---
 
@@ -184,6 +212,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
           if (data && !error) {
               setFamilyId(data.family_id);
+              localStorage.setItem('ukolnicek_family_id', data.family_id);
               return { success: true };
           } else {
               return { success: false, error: 'Nesprávný email nebo heslo.' };
@@ -195,7 +224,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const registerFamily = async (email: string, password: string, familyName: string) => {
     try {
-        // Check if email exists
         const { data: existing } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
         if (existing) return { success: false, error: 'Email již existuje.' };
 
@@ -226,31 +254,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const selectProfile = (userId: string) => {
     const user = users.find(u => u.id === userId);
-    if (user) setCurrentUser(user);
+    if (user) {
+        setCurrentUser(user);
+        localStorage.setItem('ukolnicek_user_id', userId);
+    }
   };
 
   const logout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('ukolnicek_user_id');
   };
 
   const logoutFamily = () => {
       setCurrentUser(null);
       setFamilyId(null);
+      localStorage.removeItem('ukolnicek_family_id');
+      localStorage.removeItem('ukolnicek_user_id');
   };
 
-  // --- DATA METHODS ---
+  // --- DATA METHODS (Optimistic UI updates + DB calls) ---
+
+  const refreshData = async () => {
+      await fetchData();
+  };
 
   const addTask = async (task: Task) => {
     const taskWithFamily = { ...task, familyId: familyId! };
     setTasks(prev => [...prev, taskWithFamily]);
     await supabase.from('tasks').insert(mapTaskToDb(taskWithFamily));
+    fetchData(); // Sync ID/Data
   };
 
   const editTask = async (taskId: string, updates: Partial<Task>) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
     
-    // Map partial updates is tricky, assume we map manual keys or full object re-map
-    // Simplified:
     const dbUpdates: any = {};
     if (updates.title !== undefined) dbUpdates.title = updates.title;
     if (updates.description !== undefined) dbUpdates.description = updates.description;
@@ -313,7 +350,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             proofImageUrl: undefined,
             feedback: undefined,
         };
-        await addTask(nextTask);
+        // We call addTask directly but manually
+        setTasks(prev => [...prev, nextTask]);
+        await supabase.from('tasks').insert(mapTaskToDb(nextTask));
+        fetchData();
     }
   };
 
@@ -355,6 +395,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     setUsers(prev => [...prev, newChild]);
     await supabase.from('users').insert(mapUserToDb(newChild));
+    fetchData();
   };
 
   const updateChild = async (id: string, name: string, avatarUrl?: string, password?: string) => {
@@ -403,6 +444,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }));
 
     await supabase.from('users').update({ balance: 0 }).eq('id', childId);
+    fetchData();
   };
 
   const convertPointsToMoney = async (childId: string, pointsToConvert: number) => {
@@ -494,6 +536,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         target_amount: goalWithFamily.targetAmount,
         image_url: goalWithFamily.imageUrl
     });
+    fetchData();
   };
 
   const updateGoal = async (id: string, updates: Partial<Goal>) => {
@@ -525,6 +568,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       selectProfile,
       logout,
       logoutFamily,
+      refreshData,
       addTask,
       updateTaskStatus,
       editTask,
