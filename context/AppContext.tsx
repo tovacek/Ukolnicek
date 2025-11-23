@@ -48,6 +48,7 @@ interface AppContextType {
   addGoal: (goal: Goal) => void;
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   deleteGoal: (id: string) => void;
+  checkAndClaimDailyReward: (userId: string) => Promise<boolean>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -65,7 +66,8 @@ const mapUserFromDb = (u: any): User => ({
   password: u.password,
   pin: u.pin || '', // Ensure pin is always a string
   familyName: u.family_name,
-  allowanceSettings: u.allowance_settings
+  allowanceSettings: u.allowance_settings,
+  lastLoginRewardDate: u.last_login_reward_date
 });
 
 const mapUserToDb = (u: User) => ({
@@ -80,7 +82,8 @@ const mapUserToDb = (u: User) => ({
   password: u.password,
   pin: u.pin,
   family_name: u.familyName,
-  allowance_settings: u.allowanceSettings
+  allowance_settings: u.allowanceSettings,
+  last_login_reward_date: u.lastLoginRewardDate
 });
 
 const mapTaskFromDb = (t: any): Task => ({
@@ -617,6 +620,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const checkAndClaimDailyReward = async (userId: string): Promise<boolean> => {
+    const user = users.find(u => u.id === userId);
+    if (!user) return false;
+
+    const todayStr = new Date().toISOString().split('T')[0];
+
+    // Check if already claimed today
+    if (user.lastLoginRewardDate === todayStr) {
+        return false;
+    }
+
+    // Logic to claim
+    const rewardPoints = 10;
+    const newPoints = (user.points || 0) + rewardPoints;
+    
+    const updates = { 
+        points: newPoints, 
+        lastLoginRewardDate: todayStr 
+    };
+
+    // Optimistic UI Update
+    setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
+    if (currentUser?.id === userId) {
+        setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+    }
+
+    // DB Update
+    await supabase.from('users').update({ 
+        points: newPoints, 
+        last_login_reward_date: todayStr 
+    }).eq('id', userId);
+
+    return true;
+  };
+
   return (
     <AppContext.Provider value={{
       familyId,
@@ -649,7 +687,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       getAllowanceProgress,
       addGoal,
       updateGoal,
-      deleteGoal
+      deleteGoal,
+      checkAndClaimDailyReward
     }}>
       {children}
     </AppContext.Provider>

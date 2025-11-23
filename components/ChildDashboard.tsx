@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { TaskStatus, Task, UserRole, Goal } from '../types';
-import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Image as ImageIcon, Sun } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 
 // --- Helper Component for Camera/Gallery ---
@@ -139,7 +139,7 @@ const ImageUploader: React.FC<{
 };
 
 const ChildDashboard: React.FC = () => {
-  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData } = useApp();
+  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward } = useApp();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [motivation, setMotivation] = useState<string>("");
@@ -173,6 +173,9 @@ const ChildDashboard: React.FC = () => {
   const [newGoalAmount, setNewGoalAmount] = useState(100);
   const [newGoalImage, setNewGoalImage] = useState<string | null>(null);
 
+  // Daily Reward State
+  const [showDailyRewardModal, setShowDailyRewardModal] = useState(false);
+
   // Delete Confirmation States
   const [deleteGoalConfirmation, setDeleteGoalConfirmation] = useState<{isOpen: boolean, goalId: string | null}>({ isOpen: false, goalId: null });
   const [deleteTaskConfirmation, setDeleteTaskConfirmation] = useState<{isOpen: boolean, taskId: string | null}>({ isOpen: false, taskId: null });
@@ -201,6 +204,20 @@ const ChildDashboard: React.FC = () => {
 
   // Combined "Done" list for the second tab
   const doneList = [...pendingTasks, ...completedTasks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Check for Daily Reward on Mount
+  useEffect(() => {
+    const checkReward = async () => {
+        if (currentUser) {
+            const received = await checkAndClaimDailyReward(currentUser.id);
+            if (received) {
+                setShowDailyRewardModal(true);
+                triggerCelebration();
+            }
+        }
+    };
+    checkReward();
+  }, [currentUser?.id]); // Only run when user changes (login)
 
   useEffect(() => {
     if (currentUser && completedTasks.length > 0) {
@@ -819,6 +836,37 @@ const ChildDashboard: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Daily Reward Modal */}
+      {showDailyRewardModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 text-center shadow-2xl animate-scale-in relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-yellow to-orange-400"></div>
+                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-100 rounded-full blur-2xl"></div>
+                  
+                  <div className="inline-block p-4 bg-yellow-100 rounded-full text-brand-yellow mb-4 animate-bounce">
+                      <Sun size={48} fill="currentColor" />
+                  </div>
+                  
+                  <h2 className="text-2xl font-display font-bold text-slate-800 mb-2">Vítej zpět!</h2>
+                  <p className="text-slate-500 mb-6">Tady je tvá denní odměna za přihlášení.</p>
+                  
+                  <div className="bg-gradient-to-br from-brand-yellow to-orange-400 text-white rounded-2xl p-6 mb-8 shadow-lg transform rotate-2">
+                      <div className="text-4xl font-bold font-display flex items-center justify-center gap-2">
+                          +10 <Star fill="currentColor" size={32}/>
+                      </div>
+                      <div className="text-xs uppercase font-bold tracking-widest opacity-80 mt-1">Bodů</div>
+                  </div>
+
+                  <button 
+                    onClick={() => setShowDailyRewardModal(false)}
+                    className="w-full py-3.5 bg-brand-dark text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all active:scale-95"
+                  >
+                      Paráda, beru to!
+                  </button>
+              </div>
+          </div>
       )}
 
       {/* Custom Task Modal */}

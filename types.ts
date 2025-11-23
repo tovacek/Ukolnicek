@@ -24,6 +24,7 @@ export interface User {
   pin?: string;      // Profile Lock PIN (for switching profiles)
   familyName?: string; // Name of the family group
   allowanceSettings?: AllowanceSettings;
+  lastLoginRewardDate?: string; // YYYY-MM-DD of last daily login reward
 }
 
 export enum TaskStatus {
