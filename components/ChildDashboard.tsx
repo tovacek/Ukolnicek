@@ -2,14 +2,146 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { TaskStatus, Task, UserRole, Goal } from '../types';
-import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Image as ImageIcon } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
+
+// --- Helper Component for Camera/Gallery ---
+const ImageUploader: React.FC<{
+    onImageSelected: (base64: string | null) => void;
+    initialImage?: string | null;
+    label?: string;
+}> = ({ onImageSelected, initialImage, label = "Fotka" }) => {
+    const [image, setImage] = useState<string | null>(initialImage || null);
+    const [isCameraOpen, setIsCameraOpen] = useState(false);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const streamRef = useRef<MediaStream | null>(null);
+
+    // Sync if parent changes initialImage
+    useEffect(() => {
+        setImage(initialImage || null);
+    }, [initialImage]);
+
+    const startCamera = async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'environment' } // Prefer rear camera on mobile
+            });
+            streamRef.current = stream;
+            setIsCameraOpen(true);
+            // Wait slightly for modal/dom to be ready
+            setTimeout(() => {
+                if (videoRef.current) {
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play();
+                }
+            }, 100);
+        } catch (err) {
+            console.error(err);
+            alert("Nelze spustit kameru. Zkontrolujte, zda jste aplikaci povolili přístup k fotoaparátu v nastavení prohlížeče.");
+        }
+    };
+
+    const stopCamera = () => {
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+        setIsCameraOpen(false);
+    };
+
+    const takePhoto = () => {
+        if (videoRef.current) {
+            const canvas = document.createElement('canvas');
+            canvas.width = videoRef.current.videoWidth;
+            canvas.height = videoRef.current.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                ctx.drawImage(videoRef.current, 0, 0);
+                const base64 = canvas.toDataURL('image/jpeg', 0.7); // Compress slightly
+                setImage(base64);
+                onImageSelected(base64);
+                stopCamera();
+            }
+        }
+    };
+
+    const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                const res = reader.result as string;
+                setImage(res);
+                onImageSelected(res);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const clearImage = () => {
+        setImage(null);
+        onImageSelected(null);
+    };
+
+    // Cleanup camera on unmount
+    useEffect(() => {
+        return () => stopCamera();
+    }, []);
+
+    return (
+        <div className="mb-4">
+            <label className="block text-sm font-bold text-gray-700 mb-2">{label}</label>
+
+            {isCameraOpen ? (
+                <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex items-center justify-center shadow-inner">
+                    <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
+                    <div className="absolute bottom-4 flex gap-6 items-center z-10">
+                        <button type="button" onClick={stopCamera} className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-colors">
+                            <X size={24} />
+                        </button>
+                        <button type="button" onClick={takePhoto} className="p-1 bg-white rounded-full border-4 border-white/30 shadow-lg active:scale-95 transition-transform">
+                            <div className="w-14 h-14 bg-red-500 rounded-full border-2 border-white"></div>
+                        </button>
+                    </div>
+                </div>
+            ) : image ? (
+                 <div className="relative rounded-2xl overflow-hidden aspect-video border-2 border-brand-green bg-green-50 shadow-sm group">
+                    <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
+                    <button type="button" onClick={clearImage} className="absolute top-2 right-2 p-2 bg-white rounded-full text-red-500 shadow-md hover:bg-red-50 transition-colors">
+                        <Trash2 size={20} />
+                    </button>
+                </div>
+            ) : (
+                <div className="grid grid-cols-2 gap-3">
+                    <button
+                        type="button"
+                        onClick={startCamera}
+                        className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-2xl hover:bg-blue-50 hover:border-brand-blue transition-colors gap-2 text-gray-500 hover:text-brand-blue h-32"
+                    >
+                        <div className="p-3 bg-blue-50 rounded-full text-brand-blue mb-1">
+                            <Camera size={24} />
+                        </div>
+                        <span className="font-bold text-sm">Vyfotit</span>
+                    </button>
+
+                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-2xl hover:bg-green-50 hover:border-brand-green transition-colors gap-2 text-gray-500 hover:text-brand-green cursor-pointer h-32 relative">
+                        <div className="p-3 bg-green-50 rounded-full text-brand-green mb-1">
+                             <ImageIcon size={24} />
+                        </div>
+                        <span className="font-bold text-sm">Galerie</span>
+                        <input type="file" onChange={handleFile} accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                    </label>
+                </div>
+            )}
+        </div>
+    );
+};
 
 const ChildDashboard: React.FC = () => {
   const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData } = useApp();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [motivation, setMotivation] = useState<string>("");
   const [showHistory, setShowHistory] = useState(false);
   
@@ -27,7 +159,6 @@ const ChildDashboard: React.FC = () => {
   const [customTaskTitle, setCustomTaskTitle] = useState('');
   const [customTaskDesc, setCustomTaskDesc] = useState('');
   const [customTaskImage, setCustomTaskImage] = useState<string | null>(null);
-  const customFileInputRef = useRef<HTMLInputElement>(null);
 
   // Settings Modal State
   const [showSettings, setShowSettings] = useState(false);
@@ -41,7 +172,6 @@ const ChildDashboard: React.FC = () => {
   const [newGoalTitle, setNewGoalTitle] = useState('');
   const [newGoalAmount, setNewGoalAmount] = useState(100);
   const [newGoalImage, setNewGoalImage] = useState<string | null>(null);
-  const goalFileInputRef = useRef<HTMLInputElement>(null);
 
   // Delete Confirmation States
   const [deleteGoalConfirmation, setDeleteGoalConfirmation] = useState<{isOpen: boolean, goalId: string | null}>({ isOpen: false, goalId: null });
@@ -88,17 +218,6 @@ const ChildDashboard: React.FC = () => {
   const triggerCelebration = () => {
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 3000);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, setPreview: (val: string) => void) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
   };
 
   const submitTask = () => {
@@ -677,25 +796,11 @@ const ChildDashboard: React.FC = () => {
             </div>
 
             <div className="border-t border-gray-100 pt-6">
-                <label className="block text-sm font-bold text-gray-700 mb-3 ml-1 flex items-center gap-2">
-                   <Camera size={16} /> Fotka (nepovinné)
-                </label>
-                <div
-                onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-2xl h-40 flex flex-col items-center justify-center mb-6 cursor-pointer transition-all overflow-hidden relative group ${previewImage ? 'border-brand-green bg-green-50' : 'border-gray-300 hover:border-brand-blue hover:bg-blue-50'}`}
-                >
-                {previewImage ? (
-                    <img src={previewImage} className="w-full h-full object-cover" alt="Preview" />
-                ) : (
-                    <div className="flex flex-col items-center text-gray-400 group-hover:text-brand-blue transition-colors">
-                        <div className="bg-gray-100 p-3 rounded-full mb-2 group-hover:bg-blue-100">
-                            <Camera size={24} />
-                        </div>
-                        <span className="text-xs font-medium">Klikni pro přidání fotky</span>
-                    </div>
-                )}
-                <input type="file" ref={fileInputRef} onChange={(e) => handleFileChange(e, setPreviewImage)} className="hidden" accept="image/*" />
-                </div>
+                <ImageUploader 
+                    onImageSelected={setPreviewImage} 
+                    initialImage={previewImage} 
+                    label="Fotka hotového úkolu (nepovinné)" 
+                />
             </div>
 
             <div className="flex gap-3">
@@ -719,7 +824,7 @@ const ChildDashboard: React.FC = () => {
       {/* Custom Task Modal */}
       {showCustomTaskModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl">
+            <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2"><Sparkles className="text-brand-yellow"/> Mám hotovo navíc</h3>
                     <button onClick={() => setShowCustomTaskModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20} className="text-gray-500"/></button>
@@ -746,21 +851,11 @@ const ChildDashboard: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Fotka</label>
-                         <div
-                            onClick={() => customFileInputRef.current?.click()}
-                            className={`border-2 border-dashed rounded-xl h-32 flex flex-col items-center justify-center cursor-pointer overflow-hidden relative ${customTaskImage ? 'border-green-400' : 'border-gray-300 hover:bg-gray-50'}`}
-                        >
-                            {customTaskImage ? (
-                                <img src={customTaskImage} className="w-full h-full object-cover" alt="Evidence" />
-                            ) : (
-                                <div className="text-gray-400 flex flex-col items-center">
-                                    <Camera size={24} className="mb-1"/>
-                                    <span className="text-xs">Přidat fotku</span>
-                                </div>
-                            )}
-                            <input type="file" ref={customFileInputRef} onChange={(e) => handleFileChange(e, setCustomTaskImage)} className="hidden" accept="image/*" />
-                        </div>
+                         <ImageUploader 
+                            onImageSelected={setCustomTaskImage} 
+                            initialImage={customTaskImage} 
+                            label="Důkaz (fotka)" 
+                        />
                     </div>
                 </div>
                 
@@ -778,7 +873,7 @@ const ChildDashboard: React.FC = () => {
        {/* Add/Edit Goal Modal */}
        {showGoalModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl">
+            <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-4">
                     <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2">
                         <Target className="text-brand-red"/> 
@@ -810,21 +905,11 @@ const ChildDashboard: React.FC = () => {
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-2">Obrázek (volitelné)</label>
-                         <div
-                            onClick={() => goalFileInputRef.current?.click()}
-                            className={`border-2 border-dashed rounded-xl h-32 flex flex-col items-center justify-center cursor-pointer overflow-hidden relative ${newGoalImage ? 'border-green-400' : 'border-gray-300 hover:bg-gray-50'}`}
-                        >
-                            {newGoalImage ? (
-                                <img src={newGoalImage} className="w-full h-full object-cover" alt="Goal" />
-                            ) : (
-                                <div className="text-gray-400 flex flex-col items-center">
-                                    <Camera size={24} className="mb-1"/>
-                                    <span className="text-xs">Vybrat obrázek</span>
-                                </div>
-                            )}
-                            <input type="file" ref={goalFileInputRef} onChange={(e) => handleFileChange(e, setNewGoalImage)} className="hidden" accept="image/*" />
-                        </div>
+                        <ImageUploader 
+                            onImageSelected={setNewGoalImage} 
+                            initialImage={newGoalImage} 
+                            label="Obrázek přání (volitelné)" 
+                        />
                     </div>
                 </div>
                 
