@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { TaskStatus, Task, UserRole, Goal } from '../types';
-import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw } from 'lucide-react';
+import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 
 const ChildDashboard: React.FC = () => {
@@ -42,6 +42,10 @@ const ChildDashboard: React.FC = () => {
   const [newGoalAmount, setNewGoalAmount] = useState(100);
   const [newGoalImage, setNewGoalImage] = useState<string | null>(null);
   const goalFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Delete Confirmation States
+  const [deleteGoalConfirmation, setDeleteGoalConfirmation] = useState<{isOpen: boolean, goalId: string | null}>({ isOpen: false, goalId: null });
+  const [deleteTaskConfirmation, setDeleteTaskConfirmation] = useState<{isOpen: boolean, taskId: string | null}>({ isOpen: false, taskId: null });
 
   // Get ALL tasks for child
   const tasks = currentUser ? getTasksForChild(currentUser.id) : [];
@@ -131,9 +135,14 @@ const ChildDashboard: React.FC = () => {
       triggerCelebration();
   };
 
-  const handleDeleteCustomTask = (taskId: string) => {
-      if(window.confirm('Chceš tento úkol smazat?')) {
-          deleteTask(taskId);
+  const requestDeleteCustomTask = (taskId: string) => {
+      setDeleteTaskConfirmation({ isOpen: true, taskId });
+  };
+
+  const confirmDeleteTask = () => {
+      if (deleteTaskConfirmation.taskId) {
+          deleteTask(deleteTaskConfirmation.taskId);
+          setDeleteTaskConfirmation({ isOpen: false, taskId: null });
       }
   };
 
@@ -222,11 +231,19 @@ const ChildDashboard: React.FC = () => {
       setEditingGoalId(null);
   };
 
-  const handleDeleteGoal = (e: React.MouseEvent | null, id: string) => {
-      if (e) e.stopPropagation();
-      if(window.confirm('Opravdu chceš smazat toto přání?')) {
-          deleteGoal(id);
-          setShowGoalModal(false);
+  const requestDeleteGoal = (e: React.MouseEvent | null, id: string) => {
+      if (e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+      setDeleteGoalConfirmation({ isOpen: true, goalId: id });
+  };
+
+  const confirmDeleteGoal = () => {
+      if (deleteGoalConfirmation.goalId) {
+          deleteGoal(deleteGoalConfirmation.goalId);
+          setDeleteGoalConfirmation({ isOpen: false, goalId: null });
+          setShowGoalModal(false); // Close edit modal if open
       }
   };
 
@@ -309,20 +326,20 @@ const ChildDashboard: React.FC = () => {
           <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-brand-yellow/10 rounded-full blur-xl"></div>
 
           {/* Points Section */}
-          <div className="text-center relative z-10 group/points">
+          <div className="text-center relative z-10 flex flex-col items-center">
             <div className="flex items-center justify-center gap-1 text-brand-yellow mb-1">
               <Star fill="currentColor" size={22} />
             </div>
             <span className="text-3xl font-display font-bold tracking-tight">{currentUser.points}</span>
-            <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium">Body</p>
+            <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium mb-1">Body</p>
             
-            {/* Exchange Button */}
+            {/* Exchange Button - Always Visible now */}
             {(currentUser.points || 0) >= 10 && (
                 <button 
                     onClick={handleExchangeOpen}
-                    className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-brand-yellow text-brand-dark rounded-full p-1.5 shadow-md group-hover/points:bottom-0 transition-all duration-300 hover:bg-white hover:scale-110"
+                    className="mt-1 bg-brand-yellow text-brand-dark rounded-full px-2 py-1 text-[10px] font-bold shadow-md hover:bg-white hover:scale-105 transition-all flex items-center gap-1"
                 >
-                    <Repeat size={14} className="animate-spin-slow" />
+                    <Repeat size={10} /> Proměnit
                 </button>
             )}
           </div>
@@ -339,7 +356,7 @@ const ChildDashboard: React.FC = () => {
           </div>
           
           {/* History indicator */}
-          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all text-white/30">
+          <div className="absolute top-3 right-3 opacity-30">
               <History size={14} />
           </div>
         </div>
@@ -427,9 +444,14 @@ const ChildDashboard: React.FC = () => {
                      const isAchieved = (currentUser.balance || 0) >= goal.targetAmount;
                      
                      return (
-                         <div key={goal.id} onClick={() => openEditGoalModal(goal)} className="flex-shrink-0 w-48 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 relative snap-start cursor-pointer hover:shadow-md transition-shadow">
-                             <button onClick={(e) => handleDeleteGoal(e, goal.id)} className="absolute top-2 right-2 p-1.5 bg-white/90 rounded-full text-gray-400 hover:text-red-500 shadow-sm transition-colors z-10">
-                                <Trash2 size={16}/>
+                         <div key={goal.id} onClick={() => openEditGoalModal(goal)} className="flex-shrink-0 w-48 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 relative snap-start cursor-pointer hover:shadow-md transition-shadow group">
+                             <button 
+                                type="button"
+                                onClick={(e) => requestDeleteGoal(e, goal.id)} 
+                                className="absolute top-2 right-2 p-2 bg-white rounded-full text-gray-400 hover:text-red-500 shadow-md transition-colors z-20"
+                                title="Smazat"
+                             >
+                                <Trash2 size={18}/>
                              </button>
                              
                              <div className="h-24 bg-gray-100 rounded-xl mb-3 overflow-hidden relative">
@@ -607,7 +629,7 @@ const ChildDashboard: React.FC = () => {
                         {/* Child can delete their pending custom tasks */}
                         {task.status === TaskStatus.PENDING_APPROVAL && task.createdBy === UserRole.CHILD && (
                             <button 
-                                onClick={(e) => { e.stopPropagation(); handleDeleteCustomTask(task.id); }} 
+                                onClick={(e) => { e.stopPropagation(); requestDeleteCustomTask(task.id); }} 
                                 className="p-2 bg-gray-100 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
                             >
                                 <Trash2 size={16} />
@@ -809,7 +831,7 @@ const ChildDashboard: React.FC = () => {
                 <div className="flex gap-3">
                     {editingGoalId && (
                         <button 
-                            onClick={(e) => handleDeleteGoal(e, editingGoalId)}
+                            onClick={(e) => requestDeleteGoal(e, editingGoalId)}
                             className="p-3.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
                             title="Smazat přání"
                         >
@@ -826,6 +848,64 @@ const ChildDashboard: React.FC = () => {
                     </button>
                 </div>
             </div>
+          </div>
+      )}
+
+      {/* Goal Delete Confirmation Modal */}
+      {deleteGoalConfirmation.isOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                  <div className="flex flex-col items-center text-center mb-6">
+                      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                          <AlertTriangle size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800">Smazat toto přání?</h3>
+                      <p className="text-gray-500 mt-2 text-sm">Tato akce je nevratná.</p>
+                  </div>
+                  <div className="flex gap-3">
+                      <button 
+                          onClick={() => setDeleteGoalConfirmation({ isOpen: false, goalId: null })}
+                          className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                      >
+                          Ne, nechat
+                      </button>
+                      <button 
+                          onClick={confirmDeleteGoal}
+                          className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
+                      >
+                          Ano, smazat
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Task Delete Confirmation Modal */}
+      {deleteTaskConfirmation.isOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                  <div className="flex flex-col items-center text-center mb-6">
+                      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                          <AlertTriangle size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800">Smazat tento úkol?</h3>
+                      <p className="text-gray-500 mt-2 text-sm">Úkol bude trvale odstraněn.</p>
+                  </div>
+                  <div className="flex gap-3">
+                      <button 
+                          onClick={() => setDeleteTaskConfirmation({ isOpen: false, taskId: null })}
+                          className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                      >
+                          Ne, nechat
+                      </button>
+                      <button 
+                          onClick={confirmDeleteTask}
+                          className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
+                      >
+                          Ano, smazat
+                      </button>
+                  </div>
+              </div>
           </div>
       )}
 

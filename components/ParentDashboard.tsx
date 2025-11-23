@@ -32,7 +32,8 @@ import {
   RefreshCw,
   Eye,
   EyeOff,
-  Home
+  Home,
+  AlertTriangle
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
@@ -126,6 +127,10 @@ const ParentDashboard: React.FC = () => {
   const [allowanceDay, setAllowanceDay] = useState(1);
   const [allowanceThreshold, setAllowanceThreshold] = useState(100);
   const [allowanceEnabled, setAllowanceEnabled] = useState(true);
+
+  // Delete Confirmation States
+  const [deleteTaskConfirmation, setDeleteTaskConfirmation] = useState<{isOpen: boolean, taskId: string | null}>({ isOpen: false, taskId: null });
+  const [deleteChildConfirmation, setDeleteChildConfirmation] = useState<{isOpen: boolean, childId: string | null}>({ isOpen: false, childId: null });
 
   const children = getChildren();
   const pendingTasks = tasks.filter(t => t.status === TaskStatus.PENDING_APPROVAL);
@@ -275,13 +280,22 @@ const ParentDashboard: React.FC = () => {
       }
   };
 
-  const confirmAndDeleteTask = (e: React.MouseEvent, taskId: string) => {
+  const requestDeleteTask = (e: React.MouseEvent, taskId: string) => {
       e.stopPropagation();
-      if (window.confirm('Opravdu chcete smazat tento úkol?')) {
-          deleteTask(taskId);
-          return true;
+      setDeleteTaskConfirmation({ isOpen: true, taskId });
+  };
+
+  const confirmDeleteTask = () => {
+      if (deleteTaskConfirmation.taskId) {
+          deleteTask(deleteTaskConfirmation.taskId);
+          
+          // If the task being deleted was currently open in the Edit modal, close it
+          if (editingTask && editingTask.id === deleteTaskConfirmation.taskId) {
+              setEditingTask(null);
+          }
+          
+          setDeleteTaskConfirmation({ isOpen: false, taskId: null });
       }
-      return false;
   };
 
   const handleAddChild = (e: React.FormEvent) => {
@@ -305,6 +319,17 @@ const ParentDashboard: React.FC = () => {
       updateChild(editingChildId, editName, editAvatarUrl, editChildPin || undefined);
       setEditingChildId(null);
     }
+  };
+
+  const requestDeleteChild = (childId: string) => {
+      setDeleteChildConfirmation({ isOpen: true, childId });
+  };
+
+  const confirmDeleteChild = () => {
+      if (deleteChildConfirmation.childId) {
+          deleteChild(deleteChildConfirmation.childId);
+          setDeleteChildConfirmation({ isOpen: false, childId: null });
+      }
   };
 
   const openPayoutModal = (child: User) => {
@@ -454,9 +479,9 @@ const ParentDashboard: React.FC = () => {
                                       ) : (
                                           <div>
                                             <h4 className="text-xl font-bold text-slate-800">{child.name}</h4>
-                                            <div className="flex gap-2 mt-1 text-xs text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="flex gap-2 mt-1 text-xs text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                                 <button onClick={() => startEdit(child)} className="hover:text-indigo-600 flex items-center gap-1"><Pencil size={12}/> Upravit</button>
-                                                <button onClick={() => { if(window.confirm('Opravdu smazat?')) deleteChild(child.id); }} className="hover:text-red-600 flex items-center gap-1"><Trash2 size={12}/> Smazat</button>
+                                                <button onClick={() => requestDeleteChild(child.id)} className="hover:text-red-600 flex items-center gap-1"><Trash2 size={12}/> Smazat</button>
                                             </div>
                                           </div>
                                       )}
@@ -571,9 +596,9 @@ const ParentDashboard: React.FC = () => {
                                       <div className="text-right flex flex-col items-end gap-1">
                                           <div className="font-bold text-indigo-600">{task.rewardPoints} bodů</div>
                                           {task.rewardMoney > 0 && <div className="text-xs font-bold text-emerald-600">+{task.rewardMoney} Kč</div>}
-                                          <div className="flex gap-2 mt-2 transition-opacity">
+                                          <div className="flex gap-2 mt-2">
                                               <button type="button" onClick={() => openEditTaskModal(task)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Upravit"><Pencil size={16} /></button>
-                                              <button type="button" onClick={(e) => confirmAndDeleteTask(e, task.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Smazat"><Trash2 size={16} /></button>
+                                              <button type="button" onClick={(e) => requestDeleteTask(e, task.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Smazat"><Trash2 size={16} /></button>
                                           </div>
                                       </div>
                                   </div>
@@ -599,7 +624,7 @@ const ParentDashboard: React.FC = () => {
                             return (
                                 <div key={task.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6 relative">
                                     {task.createdBy === UserRole.CHILD && (<div className="absolute top-4 right-4 flex gap-2"><div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div></div>)}
-                                    <div className="absolute top-4 right-4">{task.createdBy === UserRole.CHILD ? (<div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div>) : (<button type="button" onClick={(e) => confirmAndDeleteTask(e, task.id)} className="text-slate-300 hover:text-red-500 p-1 transition-colors" title="Smazat úkol"><Trash2 size={16} /></button>)}</div>
+                                    <div className="absolute top-4 right-4">{task.createdBy === UserRole.CHILD ? (<div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div>) : (<button type="button" onClick={(e) => requestDeleteTask(e, task.id)} className="text-slate-300 hover:text-red-500 p-1 transition-colors" title="Smazat úkol"><Trash2 size={16} /></button>)}</div>
                                     <div className="w-full md:w-48 h-48 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden border border-slate-200">{task.proofImageUrl ? (<img src={task.proofImageUrl} alt="Důkaz" className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform" />) : (<div className="w-full h-full flex flex-col items-center justify-center text-slate-400"><span className="text-xs">Bez fotky</span></div>)}</div>
                                     <div className="flex-1">
                                         <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2">{child && (<div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold"><img src={child.avatarUrl} className="w-5 h-5 rounded-full" alt="" />{child.name}</div>)}<span className="text-sm text-slate-400">{new Date(task.date).toLocaleDateString('cs-CZ')}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> Opakující se</span>)}</div>{task.createdBy !== UserRole.CHILD && (<div className="text-right pr-8"><span className="block font-bold text-indigo-600 text-lg">+{task.rewardPoints} bodů</span>{task.rewardMoney > 0 && <span className="block text-sm font-bold text-emerald-600">+{task.rewardMoney} Kč</span>}</div>)}</div>
@@ -770,7 +795,7 @@ const ParentDashboard: React.FC = () => {
                         <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Star size={14}/> Body</label><input type="number" min="0" value={editTaskPoints} onChange={(e) => setEditTaskPoints(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Coins size={14}/> Kč</label><input type="number" min="0" value={editTaskMoney} onChange={(e) => setEditTaskMoney(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div></div>
                         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200"><div className="flex items-center gap-2 mb-2"><input type="checkbox" id="editIsRecurring" checked={editTaskIsRecurring} onChange={(e) => setEditTaskIsRecurring(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500"/><label htmlFor="editIsRecurring" className="text-sm font-bold text-slate-700 flex items-center gap-1"><Repeat size={14} /> Opakovat pravidelně</label></div>{editTaskIsRecurring && (<div className="flex gap-2 pl-6"><button type="button" onClick={() => setEditTaskRecurringFreq('DAILY')} className={`px-3 py-1 text-xs rounded-full border transition-colors ${editTaskRecurringFreq === 'DAILY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Denně</button><button type="button" onClick={() => setEditTaskRecurringFreq('WEEKLY')} className={`px-3 py-1 text-xs rounded-full border transition-colors ${editTaskRecurringFreq === 'WEEKLY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Týdně</button></div>)}</div>
                     </div>
-                    <div className="flex gap-3"><button onClick={(e) => { const deleted = confirmAndDeleteTask(e, editingTask.id); if (deleted) { setEditingTask(null); } }} className="p-3 text-red-500 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-100" title="Smazat úkol"><Trash2 size={20} /></button><button onClick={handleSaveTaskChanges} disabled={!editTaskTitle.trim()} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Save size={20} /> Uložit změny</button></div>
+                    <div className="flex gap-3"><button onClick={(e) => requestDeleteTask(e, editingTask.id)} className="p-3 text-red-500 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-100" title="Smazat úkol"><Trash2 size={20} /></button><button onClick={handleSaveTaskChanges} disabled={!editTaskTitle.trim()} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Save size={20} /> Uložit změny</button></div>
                 </div>
             </div>
         )}
@@ -788,6 +813,64 @@ const ParentDashboard: React.FC = () => {
                         </div>
                     </div>
                     <button onClick={saveAllowanceSettings} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all">Uložit nastavení</button>
+                </div>
+            </div>
+        )}
+
+        {/* Delete Task Confirmation Modal */}
+        {deleteTaskConfirmation.isOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800">Smazat tento úkol?</h3>
+                        <p className="text-gray-500 mt-2 text-sm">Úkol bude trvale odstraněn.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setDeleteTaskConfirmation({ isOpen: false, taskId: null })}
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                        >
+                            Ne, nechat
+                        </button>
+                        <button 
+                            onClick={confirmDeleteTask}
+                            className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
+                        >
+                            Ano, smazat
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Delete Child Confirmation Modal */}
+        {deleteChildConfirmation.isOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800">Smazat profil dítěte?</h3>
+                        <p className="text-gray-500 mt-2 text-sm">Všechna data (body, historie) budou ztracena.</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setDeleteChildConfirmation({ isOpen: false, childId: null })}
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                        >
+                            Zrušit
+                        </button>
+                        <button 
+                            onClick={confirmDeleteChild}
+                            className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
+                        >
+                            Smazat profil
+                        </button>
+                    </div>
                 </div>
             </div>
         )}

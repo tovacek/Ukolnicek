@@ -602,8 +602,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const deleteGoal = async (id: string) => {
-    setGoals(prev => prev.filter(g => g.id !== id));
-    await supabase.from('goals').delete().eq('id', id);
+    try {
+        const { error } = await supabase.from('goals').delete().eq('id', id);
+        
+        if (error) {
+            console.error("Error deleting goal from DB:", error);
+            alert("Chyba při mazání: " + error.message);
+            return;
+        }
+
+        setGoals(prev => prev.filter(g => g.id !== id));
+    } catch (e) {
+        console.error("Exception deleting goal:", e);
+    }
   };
 
   return (
