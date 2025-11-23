@@ -20,7 +20,9 @@ export interface User {
   avatarUrl?: string;
   points?: number; // Only for children
   balance?: number; // Only for children (CZK)
-  password?: string; // Optional PIN/Password for profile switching
+  password?: string; // Main Login Password (for Parents)
+  pin?: string;      // Profile Lock PIN (for switching profiles)
+  familyName?: string; // Name of the family group
   allowanceSettings?: AllowanceSettings;
 }
 

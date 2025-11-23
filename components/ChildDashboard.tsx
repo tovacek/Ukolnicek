@@ -6,7 +6,7 @@ import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wa
 import { generateMotivationalMessage } from '../services/geminiService';
 
 const ChildDashboard: React.FC = () => {
-  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, setUserPassword, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData } = useApp();
+  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData } = useApp();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -31,8 +31,8 @@ const ChildDashboard: React.FC = () => {
 
   // Settings Modal State
   const [showSettings, setShowSettings] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
   const [settingsMessage, setSettingsMessage] = useState('');
 
   // Goal Modal State
@@ -154,18 +154,22 @@ const ChildDashboard: React.FC = () => {
       }
   };
 
-  const handlePasswordChange = () => {
-      if (!newPassword || newPassword !== confirmPassword) {
-          setSettingsMessage("Hesla se neshodují!");
+  const handlePinChange = () => {
+      if (!newPin || newPin !== confirmPin) {
+          setSettingsMessage("PINy se neshodují!");
+          return;
+      }
+      if (newPin.length !== 4) {
+          setSettingsMessage("PIN musí mít 4 číslice!");
           return;
       }
       if (currentUser) {
-          setUserPassword(currentUser.id, newPassword);
-          setSettingsMessage("Heslo bylo uloženo!");
+          updateUserPin(currentUser.id, newPin);
+          setSettingsMessage("PIN byl uložen!");
           setTimeout(() => {
               setShowSettings(false);
-              setNewPassword('');
-              setConfirmPassword('');
+              setNewPin('');
+              setConfirmPin('');
               setSettingsMessage('');
           }, 1500);
       }
@@ -218,10 +222,11 @@ const ChildDashboard: React.FC = () => {
       setEditingGoalId(null);
   };
 
-  const handleDeleteGoal = (e: React.MouseEvent, id: string) => {
-      e.stopPropagation();
+  const handleDeleteGoal = (e: React.MouseEvent | null, id: string) => {
+      if (e) e.stopPropagation();
       if(window.confirm('Opravdu chceš smazat toto přání?')) {
           deleteGoal(id);
+          setShowGoalModal(false);
       }
   };
 
@@ -423,8 +428,8 @@ const ChildDashboard: React.FC = () => {
                      
                      return (
                          <div key={goal.id} onClick={() => openEditGoalModal(goal)} className="flex-shrink-0 w-48 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 relative snap-start cursor-pointer hover:shadow-md transition-shadow">
-                             <button onClick={(e) => handleDeleteGoal(e, goal.id)} className="absolute top-2 right-2 p-1 bg-white/80 rounded-full text-gray-400 hover:text-red-500 opacity-0 hover:opacity-100 transition-opacity z-10">
-                                <Trash2 size={14}/>
+                             <button onClick={(e) => handleDeleteGoal(e, goal.id)} className="absolute top-2 right-2 p-1.5 bg-white/90 rounded-full text-gray-400 hover:text-red-500 shadow-sm transition-colors z-10">
+                                <Trash2 size={16}/>
                              </button>
                              
                              <div className="h-24 bg-gray-100 rounded-xl mb-3 overflow-hidden relative">
@@ -801,14 +806,25 @@ const ChildDashboard: React.FC = () => {
                     </div>
                 </div>
                 
-                <button 
-                    onClick={handleSaveGoal}
-                    disabled={!newGoalTitle.trim() || newGoalAmount <= 0}
-                    className="w-full py-3.5 bg-brand-dark text-white font-bold rounded-xl shadow-lg shadow-brand-dark/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                    {editingGoalId ? <Pencil size={20}/> : <Plus size={20} />} 
-                    {editingGoalId ? 'Uložit změny' : 'Přidat do seznamu'}
-                </button>
+                <div className="flex gap-3">
+                    {editingGoalId && (
+                        <button 
+                            onClick={(e) => handleDeleteGoal(e, editingGoalId)}
+                            className="p-3.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
+                            title="Smazat přání"
+                        >
+                            <Trash2 size={20} />
+                        </button>
+                    )}
+                    <button 
+                        onClick={handleSaveGoal}
+                        disabled={!newGoalTitle.trim() || newGoalAmount <= 0}
+                        className="flex-1 py-3.5 bg-brand-dark text-white font-bold rounded-xl shadow-lg shadow-brand-dark/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                        {editingGoalId ? <Pencil size={20}/> : <Plus size={20} />} 
+                        {editingGoalId ? 'Uložit změny' : 'Přidat do seznamu'}
+                    </button>
+                </div>
             </div>
           </div>
       )}
@@ -949,37 +965,40 @@ const ChildDashboard: React.FC = () => {
                       </div>
 
                       <div className="border-t border-gray-100 pt-4">
-                          <h5 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><Lock size={16}/> Změnit heslo</h5>
+                          <h5 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><Lock size={16}/> Nastavit PIN (4 čísla)</h5>
                           <div className="space-y-3">
                               <input 
                                 type="password" 
-                                placeholder="Nové heslo"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900"
+                                placeholder="Nový PIN"
+                                maxLength={4}
+                                value={newPin}
+                                onChange={(e) => setNewPin(e.target.value)}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900 text-center font-bold tracking-widest"
                               />
                               <input 
                                 type="password" 
-                                placeholder="Potvrdit heslo"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900"
+                                placeholder="Potvrdit PIN"
+                                maxLength={4}
+                                value={confirmPin}
+                                onChange={(e) => setConfirmPin(e.target.value)}
+                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900 text-center font-bold tracking-widest"
                               />
                           </div>
+                          <p className="text-xs text-gray-400 mt-2 text-center">Používá se pro přihlášení k tvému profilu.</p>
                       </div>
 
                       {settingsMessage && (
-                          <div className={`p-3 rounded-lg text-sm font-bold text-center ${settingsMessage.includes('uloženo') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                          <div className={`p-3 rounded-lg text-sm font-bold text-center ${settingsMessage.includes('uložen') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
                               {settingsMessage}
                           </div>
                       )}
 
                       <button 
-                        onClick={handlePasswordChange}
-                        disabled={!newPassword || !confirmPassword}
+                        onClick={handlePinChange}
+                        disabled={!newPin || !confirmPin}
                         className="w-full py-3 bg-brand-dark text-white font-bold rounded-xl shadow-lg disabled:opacity-50"
                       >
-                          Uložit heslo
+                          Uložit PIN
                       </button>
                   </div>
               </div>

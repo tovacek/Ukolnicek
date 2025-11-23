@@ -37,11 +37,12 @@ interface AppContextType {
   getTasksForChild: (childId: string, date?: string) => Task[];
   addPointsToChild: (childId: string, points: number, money: number) => void;
   addChild: (name: string) => void;
-  updateChild: (id: string, name: string, avatarUrl?: string, password?: string) => void;
+  updateChild: (id: string, name: string, avatarUrl?: string, pin?: string) => void;
   deleteChild: (id: string) => void;
   processPayout: (childId: string) => void;
   convertPointsToMoney: (childId: string, pointsToConvert: number) => void;
-  setUserPassword: (userId: string, password: string) => void;
+  updateFamilyProfile: (familyName: string, email: string, password?: string) => Promise<{success: boolean, error?: string}>;
+  updateUserPin: (userId: string, pin: string) => Promise<{success: boolean, error?: string}>;
   setChildAllowance: (childId: string, settings?: AllowanceSettings) => void;
   getAllowanceProgress: (childId: string) => AllowanceProgress | null;
   addGoal: (goal: Goal) => void;
@@ -62,6 +63,8 @@ const mapUserFromDb = (u: any): User => ({
   points: u.points,
   balance: u.balance,
   password: u.password,
+  pin: u.pin || '', // Ensure pin is always a string
+  familyName: u.family_name,
   allowanceSettings: u.allowance_settings
 });
 
@@ -75,6 +78,8 @@ const mapUserToDb = (u: User) => ({
   points: u.points,
   balance: u.balance,
   password: u.password,
+  pin: u.pin,
+  family_name: u.familyName,
   allowance_settings: u.allowanceSettings
 });
 
@@ -234,9 +239,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             id: parentId,
             familyId,
             email,
-            name: familyName || 'Rodič',
+            name: 'Rodič', // Default Name
             role: UserRole.PARENT,
-            password,
+            password, // Login Password
+            pin: '', // No PIN by default
+            familyName,
             avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${parentId}`
         };
 
@@ -272,7 +279,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.removeItem('ukolnicek_user_id');
   };
 
-  // --- DATA METHODS (Optimistic UI updates + DB calls) ---
+  // --- DATA METHODS ---
 
   const refreshData = async () => {
       await fetchData();
@@ -350,7 +357,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             proofImageUrl: undefined,
             feedback: undefined,
         };
-        // We call addTask directly but manually
         setTasks(prev => [...prev, nextTask]);
         await supabase.from('tasks').insert(mapTaskToDb(nextTask));
         fetchData();
@@ -391,24 +397,25 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       role: UserRole.CHILD,
       avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
       points: 0,
-      balance: 0
+      balance: 0,
+      pin: ''
     };
     setUsers(prev => [...prev, newChild]);
     await supabase.from('users').insert(mapUserToDb(newChild));
     fetchData();
   };
 
-  const updateChild = async (id: string, name: string, avatarUrl?: string, password?: string) => {
+  const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string) => {
     const updates: any = { 
         name, 
         avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-        ...(password !== undefined && { password }) 
+        ...(pin !== undefined && { pin }) 
     };
 
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
     
     const dbUpdates: any = { name, avatar_url: updates.avatarUrl };
-    if (password !== undefined) dbUpdates.password = password;
+    if (pin !== undefined) dbUpdates.pin = pin;
 
     await supabase.from('users').update(dbUpdates).eq('id', id);
   };
@@ -463,9 +470,53 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await supabase.from('users').update(updates).eq('id', childId);
   };
 
-  const setUserPassword = async (userId: string, password: string) => {
-    setUsers(prev => prev.map(u => u.id === userId ? { ...u, password } : u));
-    await supabase.from('users').update({ password }).eq('id', userId);
+  const updateUserPin = async (userId: string, pin: string) => {
+    try {
+        const { error } = await supabase.from('users').update({ pin }).eq('id', userId);
+        
+        if (error) {
+            console.error("Supabase error updating PIN:", error);
+            return { success: false, error: error.message || 'Chyba databáze' };
+        }
+
+        setUsers(prev => prev.map(u => u.id === userId ? { ...u, pin } : u));
+        if (currentUser?.id === userId) {
+            setCurrentUser(prev => prev ? { ...prev, pin } : null);
+        }
+        
+        return { success: true };
+    } catch (e) {
+        console.error("Exception updating PIN:", e);
+        return { success: false, error: 'Neočekávaná chyba' };
+    }
+  };
+
+  const updateFamilyProfile = async (familyName: string, email: string, password?: string) => {
+      try {
+          if (!currentUser) return { success: false, error: 'Nejste přihlášen' };
+          
+          const dbUpdates: any = { family_name: familyName };
+          if (currentUser.role === UserRole.PARENT) {
+              dbUpdates.email = email;
+              if (password) dbUpdates.password = password;
+          }
+          
+          const { error } = await supabase.from('users').update(dbUpdates).eq('id', currentUser.id);
+
+          if (error) {
+              console.error("Supabase error updating family profile:", error);
+              return { success: false, error: error.message };
+          }
+
+          setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, name: currentUser.name, familyName, email, ...(password && {password}) } : { ...u, familyName }));
+          
+          // Refresh to ensure sync
+          await fetchData();
+
+          return { success: true };
+      } catch (e) {
+          return { success: false, error: 'Chyba při ukládání.' };
+      }
   };
 
   const setChildAllowance = async (childId: string, settings?: AllowanceSettings) => {
@@ -581,7 +632,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deleteChild,
       processPayout,
       convertPointsToMoney,
-      setUserPassword,
+      updateFamilyProfile,
+      updateUserPin,
       setChildAllowance,
       getAllowanceProgress,
       addGoal,
