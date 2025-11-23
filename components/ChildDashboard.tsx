@@ -1,9 +1,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { TaskStatus, Task, UserRole, Goal } from '../types';
+import { TaskStatus, Task, UserRole, Goal, AvatarConfig } from '../types';
 import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Image as ImageIcon, Sun } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
+import AvatarEditor from './AvatarEditor';
+import AvatarDisplay from './AvatarDisplay';
 
 // --- Helper Component for Camera/Gallery ---
 const ImageUploader: React.FC<{
@@ -139,7 +141,7 @@ const ImageUploader: React.FC<{
 };
 
 const ChildDashboard: React.FC = () => {
-  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward } = useApp();
+  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, updateChild, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward } = useApp();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [motivation, setMotivation] = useState<string>("");
@@ -175,6 +177,9 @@ const ChildDashboard: React.FC = () => {
 
   // Daily Reward State
   const [showDailyRewardModal, setShowDailyRewardModal] = useState(false);
+
+  // Avatar Editor State
+  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
 
   // Delete Confirmation States
   const [deleteGoalConfirmation, setDeleteGoalConfirmation] = useState<{isOpen: boolean, goalId: string | null}>({ isOpen: false, goalId: null });
@@ -383,6 +388,14 @@ const ChildDashboard: React.FC = () => {
       }
   };
 
+  const handleAvatarSave = (config: AvatarConfig) => {
+    if (currentUser) {
+        // We pass empty string as avatarUrl because we now use config primarily
+        updateChild(currentUser.id, currentUser.name, currentUser.avatarUrl, undefined, config);
+        setShowAvatarEditor(false);
+    }
+  };
+
   if (!currentUser) return null;
 
   // Prepare History Data
@@ -430,9 +443,13 @@ const ChildDashboard: React.FC = () => {
         {/* Top Bar */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
-             <div className="relative">
-                <img src={currentUser.avatarUrl} className="w-14 h-14 rounded-full border-4 border-brand-yellow bg-gray-100" alt="avatar" />
-                <div className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white rounded-full"></div>
+             <div className="relative group cursor-pointer" onClick={() => setShowAvatarEditor(true)}>
+                <div className="w-14 h-14 rounded-full border-4 border-brand-yellow bg-gray-100 overflow-hidden">
+                    <AvatarDisplay user={currentUser} />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-1 shadow-sm border border-gray-100">
+                    <Pencil size={10} className="text-gray-500" />
+                </div>
              </div>
              <div>
                  <h1 className="text-xl font-display font-bold text-brand-dark leading-tight">Ahoj, {currentUser.name}!</h1>
@@ -1173,7 +1190,9 @@ const ChildDashboard: React.FC = () => {
 
                   <div className="space-y-6">
                       <div className="text-center">
-                          <img src={currentUser.avatarUrl} alt="Avatar" className="w-20 h-20 rounded-full mx-auto mb-2 bg-gray-100" />
+                           <div className="w-20 h-20 rounded-full mx-auto mb-2 overflow-hidden border-2 border-gray-100">
+                                <AvatarDisplay user={currentUser} />
+                           </div>
                           <h4 className="font-bold text-lg">{currentUser.name}</h4>
                       </div>
 
@@ -1216,6 +1235,15 @@ const ChildDashboard: React.FC = () => {
                   </div>
               </div>
           </div>
+      )}
+
+      {/* Avatar Editor Modal */}
+      {showAvatarEditor && (
+        <AvatarEditor
+            currentConfig={currentUser.avatarConfig}
+            onSave={handleAvatarSave}
+            onClose={() => setShowAvatarEditor(false)}
+        />
       )}
 
     </div>

@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings } from '../types';
+import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AvatarConfig } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
@@ -37,7 +37,7 @@ interface AppContextType {
   getTasksForChild: (childId: string, date?: string) => Task[];
   addPointsToChild: (childId: string, points: number, money: number) => void;
   addChild: (name: string) => void;
-  updateChild: (id: string, name: string, avatarUrl?: string, pin?: string) => void;
+  updateChild: (id: string, name: string, avatarUrl?: string, pin?: string, avatarConfig?: AvatarConfig) => void;
   deleteChild: (id: string) => void;
   processPayout: (childId: string) => void;
   convertPointsToMoney: (childId: string, pointsToConvert: number) => void;
@@ -61,13 +61,15 @@ const mapUserFromDb = (u: any): User => ({
   name: u.name,
   role: u.role as UserRole,
   avatarUrl: u.avatar_url,
+  avatarConfig: u.avatar_config,
   points: u.points,
   balance: u.balance,
   password: u.password,
   pin: u.pin || '', // Ensure pin is always a string
   familyName: u.family_name,
   allowanceSettings: u.allowance_settings,
-  lastLoginRewardDate: u.last_login_reward_date
+  lastLoginRewardDate: u.last_login_reward_date,
+  createdAt: u.created_at
 });
 
 const mapUserToDb = (u: User) => ({
@@ -77,6 +79,7 @@ const mapUserToDb = (u: User) => ({
   name: u.name,
   role: u.role,
   avatar_url: u.avatarUrl,
+  avatar_config: u.avatarConfig,
   points: u.points,
   balance: u.balance,
   password: u.password,
@@ -247,7 +250,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             password, // Login Password
             pin: '', // No PIN by default
             familyName,
-            avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${parentId}`
+            avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${parentId}`
         };
 
         const { error } = await supabase.from('users').insert(mapUserToDb(newParent));
@@ -398,7 +401,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       familyId: familyId!,
       name,
       role: UserRole.CHILD,
-      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
+      avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${name}`,
       points: 0,
       balance: 0,
       pin: ''
@@ -408,19 +411,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     fetchData();
   };
 
-  const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string) => {
+  const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string, avatarConfig?: AvatarConfig) => {
     const updates: any = { 
         name, 
-        avatarUrl: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-        ...(pin !== undefined && { pin }) 
+        avatarUrl: avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${name}`,
+        ...(pin !== undefined && { pin }),
+        ...(avatarConfig !== undefined && { avatarConfig })
     };
 
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
     
     const dbUpdates: any = { name, avatar_url: updates.avatarUrl };
     if (pin !== undefined) dbUpdates.pin = pin;
+    if (avatarConfig !== undefined) dbUpdates.avatar_config = avatarConfig;
 
     await supabase.from('users').update(dbUpdates).eq('id', id);
+    if (currentUser?.id === id) {
+        setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+    }
   };
 
   const deleteChild = async (id: string) => {

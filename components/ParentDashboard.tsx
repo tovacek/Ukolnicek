@@ -36,6 +36,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import AvatarDisplay from './AvatarDisplay';
 
 const ALL_CHILDREN_ID = 'ALL';
 
@@ -464,7 +465,13 @@ const ParentDashboard: React.FC = () => {
                         <div>
                           <div className="flex items-start justify-between mb-6">
                               <div className="flex items-center gap-4 w-full">
-                                  <img src={editingChildId === child.id && editAvatarUrl ? editAvatarUrl : child.avatarUrl} className="w-16 h-16 rounded-full bg-slate-50 border-2 border-slate-100 flex-shrink-0 object-cover" alt={child.name}/>
+                                  <div className="w-16 h-16 rounded-full bg-slate-50 border-2 border-slate-100 flex-shrink-0 overflow-hidden">
+                                      {editingChildId === child.id && editAvatarUrl ? (
+                                          <img src={editAvatarUrl} alt={child.name} className="w-full h-full object-cover"/>
+                                      ) : (
+                                          <AvatarDisplay user={child} />
+                                      )}
+                                  </div>
                                   <div className="w-full">
                                       {editingChildId === child.id ? (
                                           <div className="flex flex-col gap-2 w-full">
@@ -627,7 +634,7 @@ const ParentDashboard: React.FC = () => {
                                     <div className="absolute top-4 right-4">{task.createdBy === UserRole.CHILD ? (<div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div>) : (<button type="button" onClick={(e) => requestDeleteTask(e, task.id)} className="text-slate-300 hover:text-red-500 p-1 transition-colors" title="Smazat úkol"><Trash2 size={16} /></button>)}</div>
                                     <div className="w-full md:w-48 h-48 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden border border-slate-200">{task.proofImageUrl ? (<img src={task.proofImageUrl} alt="Důkaz" className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform" />) : (<div className="w-full h-full flex flex-col items-center justify-center text-slate-400"><span className="text-xs">Bez fotky</span></div>)}</div>
                                     <div className="flex-1">
-                                        <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2">{child && (<div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold"><img src={child.avatarUrl} className="w-5 h-5 rounded-full" alt="" />{child.name}</div>)}<span className="text-sm text-slate-400">{new Date(task.date).toLocaleDateString('cs-CZ')}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> Opakující se</span>)}</div>{task.createdBy !== UserRole.CHILD && (<div className="text-right pr-8"><span className="block font-bold text-indigo-600 text-lg">+{task.rewardPoints} bodů</span>{task.rewardMoney > 0 && <span className="block text-sm font-bold text-emerald-600">+{task.rewardMoney} Kč</span>}</div>)}</div>
+                                        <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2">{child && (<div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold"><div className="w-5 h-5 rounded-full overflow-hidden"><AvatarDisplay user={child}/></div>{child.name}</div>)}<span className="text-sm text-slate-400">{new Date(task.date).toLocaleDateString('cs-CZ')}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> Opakující se</span>)}</div>{task.createdBy !== UserRole.CHILD && (<div className="text-right pr-8"><span className="block font-bold text-indigo-600 text-lg">+{task.rewardPoints} bodů</span>{task.rewardMoney > 0 && <span className="block text-sm font-bold text-emerald-600">+{task.rewardMoney} Kč</span>}</div>)}</div>
                                         <h3 className="text-xl font-bold text-slate-800 mb-2">{task.title}</h3>
                                         <p className="text-slate-600 mb-6 bg-slate-50 p-3 rounded-lg text-sm">{task.description || <em>Bez popisu</em>}</p>
                                         <div className="flex gap-3"><button onClick={() => handleReject(task.id)} className="flex-1 py-2 border border-red-200 text-red-600 rounded-lg font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2"><X size={18} /> Vrátit k opravě</button><button onClick={() => initiateApproval(task)} className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-200 transition-colors flex items-center justify-center gap-2"><Check size={18} /> {task.createdBy === UserRole.CHILD ? 'Ohodnotit a Schválit' : 'Schválit splnění'}</button></div>
@@ -702,10 +709,12 @@ const ParentDashboard: React.FC = () => {
                      <p className="text-slate-500 text-sm mb-6">Nastavení vašeho osobního profilu.</p>
 
                      <div className="flex items-center gap-4 mb-6">
-                        <img src={profileAvatar || currentUser.avatarUrl} alt="Avatar" className="w-16 h-16 rounded-full border-2 border-slate-100 bg-slate-50" />
+                        <div className="w-16 h-16 rounded-full border-2 border-slate-100 bg-slate-50 overflow-hidden">
+                             <AvatarDisplay user={currentUser} />
+                        </div>
                         <div>
                             <div className="text-xs text-slate-400 font-bold uppercase">Aktuální avatar</div>
-                            <div className="text-sm font-mono text-slate-600 truncate w-40 opacity-50">{profileAvatar}</div>
+                            <div className="text-sm font-mono text-slate-600 truncate w-40 opacity-50">{profileAvatar || 'System Default'}</div>
                         </div>
                      </div>
 

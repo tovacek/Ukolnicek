@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { UserRole } from '../types';
 import { ShieldCheck, Baby, Lock, ArrowRight, X, Home, LogOut, Sparkles, Star, CheckSquare } from 'lucide-react';
+import AvatarDisplay from './AvatarDisplay';
 
 type LoginView = 'LANDING' | 'LOGIN' | 'REGISTER' | 'PROFILES';
 
@@ -157,7 +159,12 @@ const LoginScreen: React.FC = () => {
                     <div className="grid grid-cols-1 gap-3">
                         {users.filter(u => u.role === UserRole.PARENT).map(user => (
                         <button key={user.id} onClick={() => handleUserClick(user.id)} className="flex items-center justify-between p-3 rounded-xl hover:bg-indigo-50 border border-gray-100 transition-all group w-full text-left">
-                            <div className="flex items-center"><img src={user.avatarUrl} alt={user.name} className="w-12 h-12 rounded-full border-2 border-white shadow-sm object-cover" /><span className="ml-4 font-medium text-gray-700 group-hover:text-indigo-600 text-lg">{user.name}</span></div>
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full border-2 border-white shadow-sm overflow-hidden">
+                                     <AvatarDisplay user={user} />
+                                </div>
+                                <span className="font-medium text-gray-700 group-hover:text-indigo-600 text-lg">{user.name}</span>
+                            </div>
                             {user.pin && <Lock size={16} className="text-gray-300 mr-2"/>}
                         </button>
                         ))}
@@ -168,8 +175,10 @@ const LoginScreen: React.FC = () => {
                     <div className="grid grid-cols-2 gap-4">
                         {users.filter(u => u.role === UserRole.CHILD).map(user => (
                         <button key={user.id} onClick={() => handleUserClick(user.id)} className="flex flex-col items-center p-4 rounded-2xl bg-white border-2 border-transparent hover:border-brand-yellow hover:shadow-lg transition-all relative">
-                            {user.pin && (<div className="absolute top-2 right-2 text-gray-300"><Lock size={14} /></div>)}
-                            <img src={user.avatarUrl} alt={user.name} className="w-16 h-16 rounded-full mb-2 object-cover" />
+                            {user.pin && (<div className="absolute top-2 right-2 text-gray-300 z-10"><Lock size={14} /></div>)}
+                            <div className="w-16 h-16 rounded-full mb-2 overflow-hidden bg-gray-50">
+                                <AvatarDisplay user={user} />
+                            </div>
                             <span className="font-display font-bold text-gray-800">{user.name}</span>
                         </button>
                         ))}
