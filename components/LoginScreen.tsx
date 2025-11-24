@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { UserRole } from '../types';
-import { ShieldCheck, Baby, Lock, ArrowRight, X, Home, LogOut, Sparkles, Star, CheckSquare } from 'lucide-react';
+import { ShieldCheck, Baby, Lock, ArrowRight, X, Home, LogOut, Sparkles, Star, CheckSquare, Coins } from 'lucide-react';
 import AvatarDisplay from './AvatarDisplay';
 
 type LoginView = 'LANDING' | 'LOGIN' | 'REGISTER' | 'PROFILES';
@@ -174,12 +174,25 @@ const LoginScreen: React.FC = () => {
                     <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider flex items-center justify-center gap-2"><Baby className="w-4 h-4" /> Děti</h3>
                     <div className="grid grid-cols-2 gap-4">
                         {users.filter(u => u.role === UserRole.CHILD).map(user => (
-                        <button key={user.id} onClick={() => handleUserClick(user.id)} className="flex flex-col items-center p-4 rounded-2xl bg-white border-2 border-transparent hover:border-brand-yellow hover:shadow-lg transition-all relative">
+                        <button key={user.id} onClick={() => handleUserClick(user.id)} className="flex flex-col items-center p-4 rounded-2xl bg-white border-2 border-transparent hover:border-brand-yellow hover:shadow-lg transition-all relative group">
                             {user.pin && (<div className="absolute top-2 right-2 text-gray-300 z-10"><Lock size={14} /></div>)}
-                            <div className="w-16 h-16 rounded-full mb-2 overflow-hidden bg-gray-50">
+                            <div className="w-16 h-16 rounded-full mb-2 overflow-hidden bg-gray-50 shadow-inner">
                                 <AvatarDisplay user={user} />
                             </div>
-                            <span className="font-display font-bold text-gray-800">{user.name}</span>
+                            <span className="font-display font-bold text-gray-800 mb-2">{user.name}</span>
+                            
+                            {/* Stats Badge */}
+                            <div className="flex items-center gap-2 bg-slate-50 px-2 py-1 rounded-md border border-slate-100 shadow-sm text-xs">
+                                <div className="flex items-center gap-1 text-brand-yellow font-bold">
+                                    <Star size={10} fill="currentColor" />
+                                    <span>{user.points || 0}</span>
+                                </div>
+                                <div className="w-px h-3 bg-slate-200"></div>
+                                <div className="flex items-center gap-1 text-brand-green font-bold">
+                                    <Coins size={10} />
+                                    <span>{user.balance || 0}</span>
+                                </div>
+                            </div>
                         </button>
                         ))}
                     </div>

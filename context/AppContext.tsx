@@ -103,7 +103,8 @@ const mapTaskFromDb = (t: any): Task => ({
   feedback: t.feedback,
   createdBy: t.created_by as UserRole,
   isRecurring: t.is_recurring,
-  recurringFrequency: t.recurring_frequency
+  recurringFrequency: t.recurring_frequency,
+  penalty: t.penalty !== undefined ? t.penalty : 5
 });
 
 const mapTaskToDb = (t: Task) => ({
@@ -120,7 +121,8 @@ const mapTaskToDb = (t: Task) => ({
   feedback: t.feedback,
   created_by: t.createdBy,
   is_recurring: t.isRecurring,
-  recurring_frequency: t.recurringFrequency
+  recurring_frequency: t.recurringFrequency,
+  penalty: t.penalty
 });
 
 const mapPayoutFromDb = (p: any): PayoutRecord => ({
@@ -311,6 +313,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (updates.date !== undefined) dbUpdates.date = updates.date;
     if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
     if (updates.recurringFrequency !== undefined) dbUpdates.recurring_frequency = updates.recurringFrequency;
+    if (updates.penalty !== undefined) dbUpdates.penalty = updates.penalty;
 
     await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
   };
@@ -652,7 +655,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
   
   const markNotificationRead = (id: string) => {
-      // Placeholder for now as notification request was cancelled
+      // Placeholder
   };
 
   return (

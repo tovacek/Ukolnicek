@@ -52,6 +52,7 @@ export interface Task {
   createdBy?: UserRole; // To distinguish between Parent assigned and Child initiated
   isRecurring?: boolean;
   recurringFrequency?: RecurringFrequency;
+  penalty?: number; // Points to subtract if completed after due date (default 5)
 }
 
 export interface RewardHistory {

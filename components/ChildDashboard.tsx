@@ -495,19 +495,37 @@ const ChildDashboard: React.FC = () => {
                         </div>
                     ) : (
                         todoTasks.map(task => {
+                            const isOverdue = task.date < todayStr;
+                            // Future tasks are no longer locked/grayscale based on prompt "dítě úkol může stále splnit".
+                            // But overdue tasks should look different.
                             const isFuture = task.date > todayStr;
+
                             return (
-                                <div key={task.id} onClick={!isFuture ? () => setSelectedTask(task) : undefined} className={`bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.98] transition-all flex gap-4 ${isFuture ? 'opacity-60 grayscale cursor-not-allowed' : 'cursor-pointer'}`}>
-                                    <div className={`w-3 h-auto rounded-full ${task.status === TaskStatus.REJECTED ? 'bg-red-500' : isFuture ? 'bg-gray-300' : 'bg-brand-blue'}`}></div>
+                                <div 
+                                    key={task.id} 
+                                    onClick={!isFuture ? () => setSelectedTask(task) : undefined} 
+                                    className={`bg-white rounded-2xl p-4 shadow-sm border active:scale-[0.98] transition-all flex gap-4 
+                                        ${isOverdue ? 'border-red-200 bg-red-50' : 'border-gray-100'} 
+                                        ${isFuture ? 'opacity-60 grayscale cursor-not-allowed' : 'cursor-pointer'}
+                                    `}
+                                >
+                                    <div className={`w-3 h-auto rounded-full ${task.status === TaskStatus.REJECTED ? 'bg-red-500' : (isOverdue ? 'bg-red-400' : (isFuture ? 'bg-gray-300' : 'bg-brand-blue'))}`}></div>
                                     <div className="flex-1 py-1">
                                         <div className="flex justify-between items-start mb-1">
-                                            <span className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                                                {isFuture ? <Lock size={12}/> : <Calendar size={12}/>} 
+                                            <span className={`text-xs font-bold flex items-center gap-1 ${isOverdue ? 'text-red-500' : 'text-gray-400'}`}>
+                                                {isFuture ? <Lock size={12}/> : (isOverdue ? <AlertCircle size={12}/> : <Calendar size={12}/>)} 
                                                 {new Date(task.date).toLocaleDateString('cs-CZ')}
+                                                {isOverdue && " (Po termínu)"}
                                             </span>
                                             <div className="flex gap-2">
-                                                 <span className="text-xs font-bold text-brand-blue bg-blue-50 px-2 py-0.5 rounded-full">+{task.rewardPoints}b</span>
-                                                 {task.rewardMoney > 0 && <span className="text-xs font-bold text-brand-green bg-green-50 px-2 py-0.5 rounded-full">+{task.rewardMoney} Kč</span>}
+                                                 {isOverdue ? (
+                                                     <span className="text-xs font-bold text-red-500 bg-red-100 px-2 py-0.5 rounded-full">-{task.penalty || 5}b</span>
+                                                 ) : (
+                                                     <>
+                                                         <span className="text-xs font-bold text-brand-blue bg-blue-50 px-2 py-0.5 rounded-full">+{task.rewardPoints}b</span>
+                                                         {task.rewardMoney > 0 && <span className="text-xs font-bold text-brand-green bg-green-50 px-2 py-0.5 rounded-full">+{task.rewardMoney} Kč</span>}
+                                                     </>
+                                                 )}
                                             </div>
                                         </div>
                                         <h4 className="font-bold text-gray-800 text-lg mb-1">{task.title}</h4>
@@ -561,16 +579,25 @@ const ChildDashboard: React.FC = () => {
             <div className="flex justify-between items-start mb-6">
               <div>
                   <h2 className="text-2xl font-display font-bold text-brand-dark mb-1">{selectedTask.title}</h2>
-                  <div className="flex gap-2">
-                      <span className="text-sm font-bold text-brand-blue bg-blue-50 px-3 py-1 rounded-full flex items-center gap-1"><Star size={14} fill="currentColor"/> {selectedTask.rewardPoints} bodů</span>
-                      {selectedTask.rewardMoney > 0 && <span className="text-sm font-bold text-brand-green bg-green-50 px-3 py-1 rounded-full flex items-center gap-1"><Coins size={14}/> {selectedTask.rewardMoney} Kč</span>}
-                  </div>
+                  {selectedTask.date < todayStr ? (
+                      <div className="flex gap-2">
+                           <span className="text-sm font-bold text-red-500 bg-red-100 px-3 py-1 rounded-full flex items-center gap-1"><AlertCircle size={14} fill="currentColor"/> Penále -{selectedTask.penalty || 5} bodů</span>
+                      </div>
+                  ) : (
+                      <div className="flex gap-2">
+                          <span className="text-sm font-bold text-brand-blue bg-blue-50 px-3 py-1 rounded-full flex items-center gap-1"><Star size={14} fill="currentColor"/> {selectedTask.rewardPoints} bodů</span>
+                          {selectedTask.rewardMoney > 0 && <span className="text-sm font-bold text-brand-green bg-green-50 px-3 py-1 rounded-full flex items-center gap-1"><Coins size={14}/> {selectedTask.rewardMoney} Kč</span>}
+                      </div>
+                  )}
               </div>
               <button onClick={() => setSelectedTask(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
             </div>
             
             <div className="bg-slate-50 p-4 rounded-2xl mb-6">
                 <p className="text-gray-700 leading-relaxed">{selectedTask.description || "Tento úkol nemá popis."}</p>
+                {selectedTask.date < todayStr && (
+                    <p className="text-xs font-bold text-red-500 mt-2">Tento úkol je po termínu. Odměna bude upravena.</p>
+                )}
                 {selectedTask.feedback && (
                     <div className="mt-3 pt-3 border-t border-slate-200">
                         <p className="text-xs font-bold text-red-500 uppercase mb-1">Poznámka od rodiče:</p>
@@ -596,6 +623,7 @@ const ChildDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Other modals remain the same */}
       {/* Custom Task Modal */}
       {showCustomTaskModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -630,7 +658,8 @@ const ChildDashboard: React.FC = () => {
               </div>
           </div>
       )}
-
+      
+      {/* ... keeping other modals (Goal, History, Exchange, Settings, DailyReward, DeleteConfirmations, ProfilePhoto) same as previous ... */}
       {/* Goal Modal */}
       {showGoalModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">

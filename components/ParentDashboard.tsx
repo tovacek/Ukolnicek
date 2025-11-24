@@ -78,6 +78,7 @@ const ParentDashboard: React.FC = () => {
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newTaskPoints, setNewTaskPoints] = useState(10);
   const [newTaskMoney, setNewTaskMoney] = useState(0);
+  const [newTaskDate, setNewTaskDate] = useState(new Date().toISOString().split('T')[0]);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurringFreq, setRecurringFreq] = useState<RecurringFrequency>('DAILY');
 
@@ -120,6 +121,7 @@ const ParentDashboard: React.FC = () => {
   const [editTaskDate, setEditTaskDate] = useState('');
   const [editTaskIsRecurring, setEditTaskIsRecurring] = useState(false);
   const [editTaskRecurringFreq, setEditTaskRecurringFreq] = useState<RecurringFrequency>('DAILY');
+  const [editTaskPenalty, setEditTaskPenalty] = useState(5);
 
   // Allowance Settings Modal State
   const [showAllowanceModal, setShowAllowanceModal] = useState(false);
@@ -180,15 +182,32 @@ const ParentDashboard: React.FC = () => {
   };
 
   const handleApprove = (task: Task, customRewards?: {points: number, money: number}) => {
-    const points = customRewards ? customRewards.points : task.rewardPoints;
-    const money = customRewards ? customRewards.money : task.rewardMoney;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const isOverdue = task.date < todayStr;
+    const penalty = task.penalty || 5;
+
+    // Logic: If overdue, apply negative points (penalty) unless custom rewards (rating) overrides it.
+    // If it's a child-created task (customRewards exists), we assume parent set the specific value they want.
+    // If it's a standard task and overdue, we give NEGATIVE points (penalty).
+    
+    let points = task.rewardPoints;
+    let money = task.rewardMoney;
+
+    if (customRewards) {
+        points = customRewards.points;
+        money = customRewards.money;
+    } else if (isOverdue) {
+        // Apply penalty logic
+        points = -penalty;
+        money = 0; // Usually no money for late tasks
+    }
 
     updateTaskStatus(
         task.id, 
         TaskStatus.APPROVED, 
         undefined, 
         undefined, 
-        customRewards
+        { points, money }
     );
     addPointsToChild(task.assignedToId, points, money);
     setRatingTask(null);
@@ -232,11 +251,12 @@ const ParentDashboard: React.FC = () => {
       rewardPoints: Number(newTaskPoints),
       rewardMoney: Number(newTaskMoney),
       assignedToId: childId,
-      date: new Date().toISOString().split('T')[0],
+      date: newTaskDate,
       status: TaskStatus.TODO,
       createdBy: UserRole.PARENT,
       isRecurring: isRecurring,
-      recurringFrequency: isRecurring ? recurringFreq : undefined
+      recurringFrequency: isRecurring ? recurringFreq : undefined,
+      penalty: 5 // Default penalty
     });
 
     if (selectedChildId === ALL_CHILDREN_ID) {
@@ -252,6 +272,8 @@ const ParentDashboard: React.FC = () => {
     setNewTaskTitle('');
     setNewTaskDesc('');
     setIsRecurring(false);
+    // Optionally reset date to today, or keep selected
+    // setNewTaskDate(new Date().toISOString().split('T')[0]); 
   };
 
   const openEditTaskModal = (task: Task) => {
@@ -264,6 +286,7 @@ const ParentDashboard: React.FC = () => {
       setEditTaskDate(task.date);
       setEditTaskIsRecurring(!!task.isRecurring);
       setEditTaskRecurringFreq(task.recurringFrequency || 'DAILY');
+      setEditTaskPenalty(task.penalty !== undefined ? task.penalty : 5);
   };
 
   const handleSaveTaskChanges = () => {
@@ -276,7 +299,8 @@ const ParentDashboard: React.FC = () => {
               assignedToId: editTaskAssignedTo,
               date: editTaskDate,
               isRecurring: editTaskIsRecurring,
-              recurringFrequency: editTaskIsRecurring ? editTaskRecurringFreq : undefined
+              recurringFrequency: editTaskIsRecurring ? editTaskRecurringFreq : undefined,
+              penalty: editTaskPenalty
           });
           setEditingTask(null);
       }
@@ -408,6 +432,8 @@ const ParentDashboard: React.FC = () => {
   };
 
   if (!currentUser) return null;
+  
+  const todayStr = new Date().toISOString().split('T')[0];
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col md:flex-row">
@@ -568,6 +594,10 @@ const ParentDashboard: React.FC = () => {
                                   ))}
                               </div>
                           </div>
+                          <div>
+                             <label className="block text-sm font-medium text-slate-600 mb-1">Datum</label>
+                             <input type="date" value={newTaskDate} onChange={(e) => setNewTaskDate(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800"/>
+                          </div>
                           <div><label className="block text-sm font-medium text-slate-600 mb-1">Název úkolu</label><input type="text" required value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" placeholder="např. Vynést koš"/></div>
                           <div><label className="block text-sm font-medium text-slate-600 mb-1">Popis</label><textarea value={newTaskDesc} onChange={e => setNewTaskDesc(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" rows={2}/></div>
                           <div className="grid grid-cols-2 gap-4">
@@ -596,10 +626,21 @@ const ParentDashboard: React.FC = () => {
                       <div className="divide-y divide-slate-100">
                           {tasks.filter(t => t.status === TaskStatus.TODO || t.status === TaskStatus.REJECTED).filter(t => selectedChildId === ALL_CHILDREN_ID || t.assignedToId === selectedChildId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(task => {
                               const assignedChild = users.find(u => u.id === task.assignedToId);
+                              const isOverdue = task.date < todayStr;
+                              
                               return (
-                                  <div key={task.id} className="p-4 hover:bg-slate-50 flex justify-between items-center group">
+                                  <div key={task.id} className={`p-4 hover:bg-slate-50 flex justify-between items-center group ${isOverdue ? 'bg-red-50' : ''}`}>
                                       <div>
-                                          <div className="flex items-center gap-2"><span className={`text-xs font-bold px-2 py-0.5 rounded ${task.status === TaskStatus.REJECTED ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{task.status === TaskStatus.REJECTED ? 'Vráceno' : 'Aktivní'}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> {task.recurringFrequency === 'WEEKLY' ? 'Týdně' : 'Denně'}</span>)}<span className="text-xs text-slate-400">{new Date(task.date).toLocaleDateString('cs-CZ')}</span>{assignedChild && (<span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1"><div className="w-3 h-3 bg-indigo-400 rounded-full"></div> {assignedChild.name}</span>)}</div>
+                                          <div className="flex items-center gap-2">
+                                              <span className={`text-xs font-bold px-2 py-0.5 rounded ${task.status === TaskStatus.REJECTED ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{task.status === TaskStatus.REJECTED ? 'Vráceno' : 'Aktivní'}</span>
+                                              {task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> {task.recurringFrequency === 'WEEKLY' ? 'Týdně' : 'Denně'}</span>)}
+                                              <span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-500 font-bold' : 'text-slate-400'}`}>
+                                                  {isOverdue && <AlertCircle size={10}/>}
+                                                  {new Date(task.date).toLocaleDateString('cs-CZ')}
+                                                  {isOverdue && " (Zpoždění)"}
+                                              </span>
+                                              {assignedChild && (<span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1"><div className="w-3 h-3 bg-indigo-400 rounded-full"></div> {assignedChild.name}</span>)}
+                                          </div>
                                           <h4 className="font-bold text-slate-700 mt-1">{task.title}</h4>
                                           <p className="text-sm text-slate-500">{task.description}</p>
                                       </div>
@@ -631,15 +672,24 @@ const ParentDashboard: React.FC = () => {
                     <div className="space-y-4">
                         {pendingTasks.map(task => {
                             const child = users.find(u => u.id === task.assignedToId);
+                            const isOverdue = task.date < todayStr;
                             return (
                                 <div key={task.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6 relative">
                                     {task.createdBy === UserRole.CHILD && (<div className="absolute top-4 right-4 flex gap-2"><div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div></div>)}
                                     <div className="absolute top-4 right-4">{task.createdBy === UserRole.CHILD ? (<div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div>) : (<button type="button" onClick={(e) => requestDeleteTask(e, task.id)} className="text-slate-300 hover:text-red-500 p-1 transition-colors" title="Smazat úkol"><Trash2 size={16} /></button>)}</div>
                                     <div className="w-full md:w-48 h-48 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden border border-slate-200">{task.proofImageUrl ? (<img src={task.proofImageUrl} alt="Důkaz" className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform" />) : (<div className="w-full h-full flex flex-col items-center justify-center text-slate-400"><span className="text-xs">Bez fotky</span></div>)}</div>
                                     <div className="flex-1">
-                                        <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2">{child && (<div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold"><div className="w-5 h-5 rounded-full overflow-hidden"><AvatarDisplay user={child}/></div>{child.name}</div>)}<span className="text-sm text-slate-400">{new Date(task.date).toLocaleDateString('cs-CZ')}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> Opakující se</span>)}</div>{task.createdBy !== UserRole.CHILD && (<div className="text-right pr-8"><span className="block font-bold text-indigo-600 text-lg">+{task.rewardPoints} bodů</span>{task.rewardMoney > 0 && <span className="block text-sm font-bold text-emerald-600">+{task.rewardMoney} Kč</span>}</div>)}</div>
+                                        <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2">{child && (<div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold"><div className="w-5 h-5 rounded-full overflow-hidden"><AvatarDisplay user={child}/></div>{child.name}</div>)}<span className={`text-sm ${isOverdue ? 'text-red-500 font-bold' : 'text-slate-400'}`}>{new Date(task.date).toLocaleDateString('cs-CZ')} {isOverdue && "(Zpoždění)"}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> Opakující se</span>)}</div>{task.createdBy !== UserRole.CHILD && (<div className="text-right pr-8"><span className="block font-bold text-indigo-600 text-lg">+{task.rewardPoints} bodů</span>{task.rewardMoney > 0 && <span className="block text-sm font-bold text-emerald-600">+{task.rewardMoney} Kč</span>}</div>)}</div>
                                         <h3 className="text-xl font-bold text-slate-800 mb-2">{task.title}</h3>
                                         <p className="text-slate-600 mb-6 bg-slate-50 p-3 rounded-lg text-sm">{task.description || <em>Bez popisu</em>}</p>
+                                        
+                                        {isOverdue && (
+                                            <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2">
+                                                <AlertTriangle size={16}/>
+                                                <span>Úkol byl splněn po termínu. Automaticky se strhne <strong>{task.penalty || 5} bodů</strong>.</span>
+                                            </div>
+                                        )}
+
                                         <div className="flex gap-3"><button onClick={() => handleReject(task.id)} className="flex-1 py-2 border border-red-200 text-red-600 rounded-lg font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2"><X size={18} /> Vrátit k opravě</button><button onClick={() => initiateApproval(task)} className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-200 transition-colors flex items-center justify-center gap-2"><Check size={18} /> {task.createdBy === UserRole.CHILD ? 'Ohodnotit a Schválit' : 'Schválit splnění'}</button></div>
                                     </div>
                                 </div>
@@ -650,9 +700,10 @@ const ParentDashboard: React.FC = () => {
             </div>
         )}
 
-        {/* SETTINGS TAB */}
+        {/* SETTINGS TAB (Same as before) */}
         {activeTab === 'settings' && (
              <div className="max-w-4xl mx-auto animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-8">
+                 {/* ... (Same implementation) */}
                  
                  {/* Section 1: Family Account Settings */}
                  <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 h-fit">
@@ -764,7 +815,8 @@ const ParentDashboard: React.FC = () => {
              </div>
         )}
 
-        {/* Modals remain the same */}
+        {/* Modals */}
+        {/* ... Payout Modal ... */}
         {payoutConfirmation && (
           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
             <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100">
@@ -774,7 +826,8 @@ const ParentDashboard: React.FC = () => {
             </div>
           </div>
         )}
-
+        
+        {/* ... Rating Task Modal ... */}
         {ratingTask && (
            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
                <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100">
@@ -786,6 +839,7 @@ const ParentDashboard: React.FC = () => {
            </div>
         )}
 
+        {/* Edit Task Modal - Updated with Penalty */}
         {editingTask && (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100 max-h-[90vh] overflow-y-auto">
@@ -795,6 +849,13 @@ const ParentDashboard: React.FC = () => {
                         <div><label className="block text-xs font-bold text-slate-500 mb-1">Název úkolu</label><input type="text" value={editTaskTitle} onChange={(e) => setEditTaskTitle(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800 font-bold"/></div>
                         <div><label className="block text-xs font-bold text-slate-500 mb-1">Popis</label><textarea value={editTaskDesc} onChange={(e) => setEditTaskDesc(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" rows={2}/></div>
                         <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Star size={14}/> Body</label><input type="number" min="0" value={editTaskPoints} onChange={(e) => setEditTaskPoints(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Coins size={14}/> Kč</label><input type="number" min="0" value={editTaskMoney} onChange={(e) => setEditTaskMoney(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div></div>
+                        
+                        <div>
+                            <label className="block text-xs font-bold text-red-500 mb-1 flex items-center gap-1"><AlertTriangle size={14}/> Penále za nesplnění (body)</label>
+                            <input type="number" min="0" value={editTaskPenalty} onChange={(e) => setEditTaskPenalty(Number(e.target.value))} className="w-full p-2 border border-red-200 bg-red-50 rounded-lg focus:ring-2 focus:ring-red-500 text-red-700"/>
+                            <p className="text-[10px] text-gray-400 mt-1">Tyto body se odečtou (resp. nezískají), pokud je úkol splněn po termínu. Nastavte na 0 pro odpuštění.</p>
+                        </div>
+
                         <div className="bg-slate-50 p-3 rounded-lg border border-slate-200"><div className="flex items-center gap-2 mb-2"><input type="checkbox" id="editIsRecurring" checked={editTaskIsRecurring} onChange={(e) => setEditTaskIsRecurring(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500"/><label htmlFor="editIsRecurring" className="text-sm font-bold text-slate-700 flex items-center gap-1"><Repeat size={14} /> Opakovat pravidelně</label></div>{editTaskIsRecurring && (<div className="flex gap-2 pl-6"><button type="button" onClick={() => setEditTaskRecurringFreq('DAILY')} className={`px-3 py-1 text-xs rounded-full border transition-colors ${editTaskRecurringFreq === 'DAILY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Denně</button><button type="button" onClick={() => setEditTaskRecurringFreq('WEEKLY')} className={`px-3 py-1 text-xs rounded-full border transition-colors ${editTaskRecurringFreq === 'WEEKLY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Týdně</button></div>)}</div>
                     </div>
                     <div className="flex gap-3"><button onClick={(e) => requestDeleteTask(e, editingTask.id)} className="p-3 text-red-500 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-100" title="Smazat úkol"><Trash2 size={20} /></button><button onClick={handleSaveTaskChanges} disabled={!editTaskTitle.trim()} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Save size={20} /> Uložit změny</button></div>
@@ -802,6 +863,7 @@ const ParentDashboard: React.FC = () => {
             </div>
         )}
 
+        {/* ... Other modals (Allowance, Delete Confirmations) ... */}
         {showAllowanceModal && (
             <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
                 <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100">
