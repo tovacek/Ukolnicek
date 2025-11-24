@@ -11,32 +11,13 @@ export interface AllowanceSettings {
   pointThreshold: number; // Points needed to get full allowance
 }
 
-export type AvatarConfig = {
-  sex?: "man" | "woman";
-  faceColor?: string;
-  earSize?: "small" | "big";
-  eyeStyle?: "circle" | "oval" | "smile";
-  noseStyle?: "short" | "long" | "round";
-  mouthStyle?: "laugh" | "smile" | "peace";
-  shirtStyle?: "hoody" | "short" | "polo";
-  glassesStyle?: "round" | "square" | "none";
-  hairColor?: string;
-  hairStyle?: "normal" | "thick" | "mohawk" | "womanLong" | "womanShort";
-  hatStyle?: "beanie" | "turban" | "none";
-  hatColor?: string;
-  eyeBrowStyle?: "up" | "upWoman";
-  shirtColor?: string;
-  bgColor?: string;
-}
-
 export interface User {
   id: string;
   familyId: string; // Links user to a specific family group
   email?: string;   // Only for Parent/Admin account login
   name: string;
   role: UserRole;
-  avatarUrl?: string; // Legacy URL support
-  avatarConfig?: AvatarConfig; // New Client-Side Render config
+  avatarUrl?: string; // Stores URL or Base64 string of photo
   points?: number; // Only for children
   balance?: number; // Only for children (CZK)
   password?: string; // Main Login Password (for Parents)
@@ -97,4 +78,14 @@ export interface Goal {
   title: string;
   targetAmount: number;
   imageUrl?: string;
+}
+
+export interface AppNotification {
+  id: string;
+  familyId: string;
+  recipientId: string;
+  message: string;
+  type: 'NEW_TASK' | 'APPROVAL_NEEDED' | 'MONEY_EARNED';
+  isRead: boolean;
+  createdAt: string;
 }

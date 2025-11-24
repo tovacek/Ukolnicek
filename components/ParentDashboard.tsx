@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import AvatarDisplay from './AvatarDisplay';
+import ImageUploader from './ImageUploader';
 
 const ALL_CHILDREN_ID = 'ALL';
 
@@ -476,8 +477,10 @@ const ParentDashboard: React.FC = () => {
                                       {editingChildId === child.id ? (
                                           <div className="flex flex-col gap-2 w-full">
                                               <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Jméno" className="border border-indigo-300 rounded px-2 py-1 text-slate-800 font-bold w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
-                                              <input type="text" value={editAvatarUrl} onChange={(e) => setEditAvatarUrl(e.target.value)} placeholder="URL avatara" className="border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 w-full focus:outline-none"/>
-                                               <input type="text" value={editChildPin} onChange={(e) => setEditChildPin(e.target.value)} placeholder="PIN (volitelné)" className="border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 w-full focus:outline-none"/>
+                                              <div className="text-xs">
+                                                  <ImageUploader onImageSelected={setEditAvatarUrl} initialImage={editAvatarUrl} label="Změnit foto"/>
+                                              </div>
+                                               <input type="text" value={editChildPin} onChange={(e) => setEditChildPin(e.target.value)} placeholder="PIN (volitelné)" className="border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 w-full focus:outline-none mt-2"/>
                                               <div className="flex gap-2 mt-1">
                                                 <button onClick={saveEdit} className="text-green-600 hover:bg-green-50 p-1 rounded flex items-center gap-1 text-xs font-bold"><Save size={16}/> Uložit</button>
                                                 <button onClick={() => setEditingChildId(null)} className="text-red-500 hover:bg-red-50 p-1 rounded flex items-center gap-1 text-xs font-bold"><XCircle size={16}/> Zrušit</button>
@@ -712,9 +715,8 @@ const ParentDashboard: React.FC = () => {
                         <div className="w-16 h-16 rounded-full border-2 border-slate-100 bg-slate-50 overflow-hidden">
                              <AvatarDisplay user={currentUser} />
                         </div>
-                        <div>
-                            <div className="text-xs text-slate-400 font-bold uppercase">Aktuální avatar</div>
-                            <div className="text-sm font-mono text-slate-600 truncate w-40 opacity-50">{profileAvatar || 'System Default'}</div>
+                        <div className="text-xs w-full">
+                            <ImageUploader onImageSelected={setProfileAvatar} initialImage={profileAvatar} label="Změnit profilovku" />
                         </div>
                      </div>
 
@@ -726,15 +728,6 @@ const ParentDashboard: React.FC = () => {
                                 className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800"
                                 value={profileName}
                                 onChange={(e) => setProfileName(e.target.value)}
-                             />
-                        </div>
-                        <div>
-                             <label className="block text-sm font-medium text-slate-600 mb-1">Avatar URL</label>
-                             <input 
-                                type="text"
-                                className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800 text-xs"
-                                value={profileAvatar}
-                                onChange={(e) => setProfileAvatar(e.target.value)}
                              />
                         </div>
                         <div>

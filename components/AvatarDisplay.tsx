@@ -1,35 +1,52 @@
 
 import React from 'react';
-import Avatar from 'react-nice-avatar';
 import { User } from '../types';
 
 interface AvatarDisplayProps {
-    user?: User; // Pass full user object if available
-    avatarUrl?: string; // Or pass individual props
-    avatarConfig?: any;
+    user?: User;
     className?: string;
-    size?: string | number; // For react-nice-avatar
 }
 
-const AvatarDisplay: React.FC<AvatarDisplayProps> = ({ user, avatarUrl, avatarConfig, className, size = "100%" }) => {
-    const config = user ? user.avatarConfig : avatarConfig;
-    const url = user ? user.avatarUrl : avatarUrl;
+const AvatarDisplay: React.FC<AvatarDisplayProps> = ({ user, className }) => {
+    // If no user provided
+    if (!user) return <div className={`bg-gray-200 ${className}`}></div>;
 
-    if (config) {
+    // 1. Show Photo if available
+    if (user.avatarUrl && user.avatarUrl.length > 0) {
         return (
-            <div className={`overflow-hidden ${className}`}>
-                 <Avatar style={{ width: '100%', height: '100%' }} {...config} />
-            </div>
+            <img 
+                src={user.avatarUrl} 
+                alt={user.name} 
+                className={`object-cover w-full h-full ${className}`} 
+            />
         );
     }
 
-    // Fallback to image URL
+    // 2. Show Initials (Fallback)
+    const initials = user.name
+        ? user.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+        : '?';
+
+    // Generate a consistent pastel color based on name
+    const colors = [
+        'bg-blue-200 text-blue-700',
+        'bg-green-200 text-green-700',
+        'bg-yellow-200 text-yellow-700',
+        'bg-purple-200 text-purple-700',
+        'bg-pink-200 text-pink-700',
+        'bg-indigo-200 text-indigo-700',
+    ];
+    
+    let hash = 0;
+    for (let i = 0; i < user.name.length; i++) {
+        hash = user.name.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorClass = colors[Math.abs(hash) % colors.length];
+
     return (
-        <img 
-            src={url || `https://api.dicebear.com/9.x/avataaars/svg?seed=fallback`} 
-            alt="Avatar" 
-            className={`object-cover ${className}`} 
-        />
+        <div className={`w-full h-full flex items-center justify-center font-bold text-xl font-display ${colorClass} ${className}`}>
+            {initials}
+        </div>
     );
 };
 

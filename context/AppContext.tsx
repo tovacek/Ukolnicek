@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AvatarConfig } from '../types';
+import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
@@ -19,6 +19,7 @@ interface AppContextType {
   tasks: Task[];
   payoutHistory: PayoutRecord[];
   goals: Goal[];
+  notifications: AppNotification[];
   
   // Auth Methods
   loginFamily: (email: string, password: string) => Promise<{success: boolean, error?: string}>;
@@ -37,7 +38,7 @@ interface AppContextType {
   getTasksForChild: (childId: string, date?: string) => Task[];
   addPointsToChild: (childId: string, points: number, money: number) => void;
   addChild: (name: string) => void;
-  updateChild: (id: string, name: string, avatarUrl?: string, pin?: string, avatarConfig?: AvatarConfig) => void;
+  updateChild: (id: string, name: string, avatarUrl?: string, pin?: string) => void;
   deleteChild: (id: string) => void;
   processPayout: (childId: string) => void;
   convertPointsToMoney: (childId: string, pointsToConvert: number) => void;
@@ -47,8 +48,9 @@ interface AppContextType {
   getAllowanceProgress: (childId: string) => AllowanceProgress | null;
   addGoal: (goal: Goal) => void;
   updateGoal: (id: string, updates: Partial<Goal>) => void;
-  deleteGoal: (id: string) => void;
+  deleteGoal: (id: string) => Promise<void>;
   checkAndClaimDailyReward: (userId: string) => Promise<boolean>;
+  markNotificationRead: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -61,11 +63,10 @@ const mapUserFromDb = (u: any): User => ({
   name: u.name,
   role: u.role as UserRole,
   avatarUrl: u.avatar_url,
-  avatarConfig: u.avatar_config,
   points: u.points,
   balance: u.balance,
   password: u.password,
-  pin: u.pin || '', // Ensure pin is always a string
+  pin: u.pin || '', 
   familyName: u.family_name,
   allowanceSettings: u.allowance_settings,
   lastLoginRewardDate: u.last_login_reward_date,
@@ -79,7 +80,6 @@ const mapUserToDb = (u: User) => ({
   name: u.name,
   role: u.role,
   avatar_url: u.avatarUrl,
-  avatar_config: u.avatarConfig,
   points: u.points,
   balance: u.balance,
   password: u.password,
@@ -150,6 +150,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [tasks, setTasks] = useState<Task[]>([]);
   const [payoutHistory, setPayoutHistory] = useState<PayoutRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
@@ -183,7 +184,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (usersData) {
           const mappedUsers = usersData.map(mapUserFromDb);
           setUsers(mappedUsers);
-          // Refresh current user data if logged in
           if (currentUser) {
               const updatedCurrent = mappedUsers.find(u => u.id === currentUser.id);
               if (updatedCurrent) setCurrentUser(updatedCurrent);
@@ -245,12 +245,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             id: parentId,
             familyId,
             email,
-            name: 'Rodič', // Default Name
+            name: 'Rodič', 
             role: UserRole.PARENT,
-            password, // Login Password
-            pin: '', // No PIN by default
+            password, 
+            pin: '',
             familyName,
-            avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${parentId}`
+            avatarUrl: ''
         };
 
         const { error } = await supabase.from('users').insert(mapUserToDb(newParent));
@@ -285,8 +285,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.removeItem('ukolnicek_user_id');
   };
 
-  // --- DATA METHODS ---
-
   const refreshData = async () => {
       await fetchData();
   };
@@ -295,7 +293,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const taskWithFamily = { ...task, familyId: familyId! };
     setTasks(prev => [...prev, taskWithFamily]);
     await supabase.from('tasks').insert(mapTaskToDb(taskWithFamily));
-    fetchData(); // Sync ID/Data
+    fetchData(); 
   };
 
   const editTask = async (taskId: string, updates: Partial<Task>) => {
@@ -401,7 +399,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       familyId: familyId!,
       name,
       role: UserRole.CHILD,
-      avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${name}`,
+      avatarUrl: '',
       points: 0,
       balance: 0,
       pin: ''
@@ -411,21 +409,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     fetchData();
   };
 
-  const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string, avatarConfig?: AvatarConfig) => {
+  const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string) => {
     const updates: any = { 
         name, 
-        avatarUrl: avatarUrl || `https://api.dicebear.com/9.x/avataaars/svg?seed=${name}`,
-        ...(pin !== undefined && { pin }),
-        ...(avatarConfig !== undefined && { avatarConfig })
+        avatarUrl: avatarUrl || '',
+        ...(pin !== undefined && { pin })
     };
 
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
     
     const dbUpdates: any = { name, avatar_url: updates.avatarUrl };
     if (pin !== undefined) dbUpdates.pin = pin;
-    if (avatarConfig !== undefined) dbUpdates.avatar_config = avatarConfig;
 
-    await supabase.from('users').update(dbUpdates).eq('id', id);
+    const { error } = await supabase.from('users').update(dbUpdates).eq('id', id);
+    if (error) console.error("Update Child Error:", error);
+
     if (currentUser?.id === id) {
         setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
     }
@@ -520,8 +518,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
 
           setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, name: currentUser.name, familyName, email, ...(password && {password}) } : { ...u, familyName }));
-          
-          // Refresh to ensure sync
           await fetchData();
 
           return { success: true };
@@ -615,13 +611,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const deleteGoal = async (id: string) => {
     try {
         const { error } = await supabase.from('goals').delete().eq('id', id);
-        
         if (error) {
             console.error("Error deleting goal from DB:", error);
             alert("Chyba při mazání: " + error.message);
             return;
         }
-
         setGoals(prev => prev.filter(g => g.id !== id));
     } catch (e) {
         console.error("Exception deleting goal:", e);
@@ -633,34 +627,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!user) return false;
 
     const todayStr = new Date().toISOString().split('T')[0];
-
-    // Check if already claimed today
     if (user.lastLoginRewardDate === todayStr) {
         return false;
     }
 
-    // Logic to claim
     const rewardPoints = 10;
     const newPoints = (user.points || 0) + rewardPoints;
-    
-    const updates = { 
-        points: newPoints, 
-        lastLoginRewardDate: todayStr 
-    };
+    const updates = { points: newPoints, lastLoginRewardDate: todayStr };
 
-    // Optimistic UI Update
     setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updates } : u));
     if (currentUser?.id === userId) {
         setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
     }
 
-    // DB Update
     await supabase.from('users').update({ 
         points: newPoints, 
         last_login_reward_date: todayStr 
     }).eq('id', userId);
 
     return true;
+  };
+  
+  const markNotificationRead = (id: string) => {
+      // Placeholder for now as notification request was cancelled
   };
 
   return (
@@ -671,6 +660,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       tasks,
       payoutHistory,
       goals,
+      notifications,
       loginFamily,
       registerFamily,
       selectProfile,
@@ -696,7 +686,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addGoal,
       updateGoal,
       deleteGoal,
-      checkAndClaimDailyReward
+      checkAndClaimDailyReward,
+      markNotificationRead
     }}>
       {children}
     </AppContext.Provider>

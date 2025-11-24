@@ -1,144 +1,12 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { TaskStatus, Task, UserRole, Goal, AvatarConfig } from '../types';
-import { CheckCircle2, Camera, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Image as ImageIcon, Sun } from 'lucide-react';
+import { TaskStatus, Task, UserRole, Goal } from '../types';
+import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
-import AvatarEditor from './AvatarEditor';
 import AvatarDisplay from './AvatarDisplay';
-
-// --- Helper Component for Camera/Gallery ---
-const ImageUploader: React.FC<{
-    onImageSelected: (base64: string | null) => void;
-    initialImage?: string | null;
-    label?: string;
-}> = ({ onImageSelected, initialImage, label = "Fotka" }) => {
-    const [image, setImage] = useState<string | null>(initialImage || null);
-    const [isCameraOpen, setIsCameraOpen] = useState(false);
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const streamRef = useRef<MediaStream | null>(null);
-
-    // Sync if parent changes initialImage
-    useEffect(() => {
-        setImage(initialImage || null);
-    }, [initialImage]);
-
-    const startCamera = async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'environment' } // Prefer rear camera on mobile
-            });
-            streamRef.current = stream;
-            setIsCameraOpen(true);
-            // Wait slightly for modal/dom to be ready
-            setTimeout(() => {
-                if (videoRef.current) {
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.play();
-                }
-            }, 100);
-        } catch (err) {
-            console.error(err);
-            alert("Nelze spustit kameru. Zkontrolujte, zda jste aplikaci povolili přístup k fotoaparátu v nastavení prohlížeče.");
-        }
-    };
-
-    const stopCamera = () => {
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-            streamRef.current = null;
-        }
-        setIsCameraOpen(false);
-    };
-
-    const takePhoto = () => {
-        if (videoRef.current) {
-            const canvas = document.createElement('canvas');
-            canvas.width = videoRef.current.videoWidth;
-            canvas.height = videoRef.current.videoHeight;
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.drawImage(videoRef.current, 0, 0);
-                const base64 = canvas.toDataURL('image/jpeg', 0.7); // Compress slightly
-                setImage(base64);
-                onImageSelected(base64);
-                stopCamera();
-            }
-        }
-    };
-
-    const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const res = reader.result as string;
-                setImage(res);
-                onImageSelected(res);
-            };
-            reader.readAsDataURL(file);
-        }
-    };
-
-    const clearImage = () => {
-        setImage(null);
-        onImageSelected(null);
-    };
-
-    // Cleanup camera on unmount
-    useEffect(() => {
-        return () => stopCamera();
-    }, []);
-
-    return (
-        <div className="mb-4">
-            <label className="block text-sm font-bold text-gray-700 mb-2">{label}</label>
-
-            {isCameraOpen ? (
-                <div className="relative rounded-2xl overflow-hidden bg-black aspect-video flex items-center justify-center shadow-inner">
-                    <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-                    <div className="absolute bottom-4 flex gap-6 items-center z-10">
-                        <button type="button" onClick={stopCamera} className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/30 transition-colors">
-                            <X size={24} />
-                        </button>
-                        <button type="button" onClick={takePhoto} className="p-1 bg-white rounded-full border-4 border-white/30 shadow-lg active:scale-95 transition-transform">
-                            <div className="w-14 h-14 bg-red-500 rounded-full border-2 border-white"></div>
-                        </button>
-                    </div>
-                </div>
-            ) : image ? (
-                 <div className="relative rounded-2xl overflow-hidden aspect-video border-2 border-brand-green bg-green-50 shadow-sm group">
-                    <img src={image} alt="Preview" className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors"></div>
-                    <button type="button" onClick={clearImage} className="absolute top-2 right-2 p-2 bg-white rounded-full text-red-500 shadow-md hover:bg-red-50 transition-colors">
-                        <Trash2 size={20} />
-                    </button>
-                </div>
-            ) : (
-                <div className="grid grid-cols-2 gap-3">
-                    <button
-                        type="button"
-                        onClick={startCamera}
-                        className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-2xl hover:bg-blue-50 hover:border-brand-blue transition-colors gap-2 text-gray-500 hover:text-brand-blue h-32"
-                    >
-                        <div className="p-3 bg-blue-50 rounded-full text-brand-blue mb-1">
-                            <Camera size={24} />
-                        </div>
-                        <span className="font-bold text-sm">Vyfotit</span>
-                    </button>
-
-                    <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-gray-300 rounded-2xl hover:bg-green-50 hover:border-brand-green transition-colors gap-2 text-gray-500 hover:text-brand-green cursor-pointer h-32 relative">
-                        <div className="p-3 bg-green-50 rounded-full text-brand-green mb-1">
-                             <ImageIcon size={24} />
-                        </div>
-                        <span className="font-bold text-sm">Galerie</span>
-                        <input type="file" onChange={handleFile} accept="image/*" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                    </label>
-                </div>
-            )}
-        </div>
-    );
-};
+import ImageUploader from './ImageUploader';
+import ProfilePhotoModal from './ProfilePhotoModal';
 
 const ChildDashboard: React.FC = () => {
   const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, updateChild, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward } = useApp();
@@ -178,8 +46,8 @@ const ChildDashboard: React.FC = () => {
   // Daily Reward State
   const [showDailyRewardModal, setShowDailyRewardModal] = useState(false);
 
-  // Avatar Editor State
-  const [showAvatarEditor, setShowAvatarEditor] = useState(false);
+  // Profile Photo Modal
+  const [showProfilePhotoModal, setShowProfilePhotoModal] = useState(false);
 
   // Delete Confirmation States
   const [deleteGoalConfirmation, setDeleteGoalConfirmation] = useState<{isOpen: boolean, goalId: string | null}>({ isOpen: false, goalId: null });
@@ -201,16 +69,12 @@ const ChildDashboard: React.FC = () => {
 
   // Categorize tasks for Lists
   const todoTasks = tasks.filter(t => t.status === TaskStatus.TODO || t.status === TaskStatus.REJECTED);
-  // Sort: Today/Past tasks first (priority), then Future tasks
   todoTasks.sort((a, b) => a.date.localeCompare(b.date));
   
   const pendingTasks = tasks.filter(t => t.status === TaskStatus.PENDING_APPROVAL);
   const completedTasks = tasks.filter(t => t.status === TaskStatus.APPROVED);
-
-  // Combined "Done" list for the second tab
   const doneList = [...pendingTasks, ...completedTasks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Check for Daily Reward on Mount
   useEffect(() => {
     const checkReward = async () => {
         if (currentUser) {
@@ -222,7 +86,7 @@ const ChildDashboard: React.FC = () => {
         }
     };
     checkReward();
-  }, [currentUser?.id]); // Only run when user changes (login)
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (currentUser && completedTasks.length > 0) {
@@ -236,7 +100,6 @@ const ChildDashboard: React.FC = () => {
     setTimeout(() => setIsRefreshing(false), 500);
   };
 
-  // Trigger celebration
   const triggerCelebration = () => {
     setShowCelebration(true);
     setTimeout(() => setShowCelebration(false), 3000);
@@ -259,8 +122,8 @@ const ChildDashboard: React.FC = () => {
           familyId: currentUser.familyId,
           title: customTaskTitle,
           description: customTaskDesc,
-          rewardPoints: 0, // Will be set by parent
-          rewardMoney: 0, // Will be set by parent
+          rewardPoints: 0, 
+          rewardMoney: 0,
           assignedToId: currentUser.id,
           date: new Date().toISOString().split('T')[0],
           status: TaskStatus.PENDING_APPROVAL,
@@ -345,14 +208,12 @@ const ChildDashboard: React.FC = () => {
       if (!currentUser || !newGoalTitle.trim() || newGoalAmount <= 0) return;
       
       if (editingGoalId) {
-          // Update existing
           updateGoal(editingGoalId, {
               title: newGoalTitle,
               targetAmount: Number(newGoalAmount),
               imageUrl: newGoalImage || undefined
           });
       } else {
-          // Create new
           const newGoal: Goal = {
               id: Math.random().toString(36).substr(2, 9),
               familyId: currentUser.familyId,
@@ -362,14 +223,9 @@ const ChildDashboard: React.FC = () => {
               imageUrl: newGoalImage || undefined
           };
           addGoal(newGoal);
-          triggerCelebration(); // Celebrate only on new goal creation
+          triggerCelebration();
       }
-      
       setShowGoalModal(false);
-      setNewGoalTitle('');
-      setNewGoalAmount(100);
-      setNewGoalImage(null);
-      setEditingGoalId(null);
   };
 
   const requestDeleteGoal = (e: React.MouseEvent | null, id: string) => {
@@ -384,21 +240,18 @@ const ChildDashboard: React.FC = () => {
       if (deleteGoalConfirmation.goalId) {
           deleteGoal(deleteGoalConfirmation.goalId);
           setDeleteGoalConfirmation({ isOpen: false, goalId: null });
-          setShowGoalModal(false); // Close edit modal if open
+          setShowGoalModal(false);
       }
   };
 
-  const handleAvatarSave = (config: AvatarConfig) => {
-    if (currentUser) {
-        // We pass empty string as avatarUrl because we now use config primarily
-        updateChild(currentUser.id, currentUser.name, currentUser.avatarUrl, undefined, config);
-        setShowAvatarEditor(false);
-    }
+  const handleProfilePhotoSave = (newUrl: string) => {
+      if (currentUser) {
+          updateChild(currentUser.id, currentUser.name, newUrl);
+      }
   };
 
   if (!currentUser) return null;
 
-  // Prepare History Data
   const myPayouts = payoutHistory.filter(p => p.childId === currentUser.id);
   
   const historyItems = [
@@ -425,7 +278,6 @@ const ChildDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-24 font-sans selection:bg-brand-yellow/30">
       
-      {/* Celebration Overlay */}
       {showCelebration && (
         <div className="fixed inset-0 z-[100] pointer-events-none flex items-center justify-center overflow-hidden">
           <div className="absolute inset-0 bg-brand-yellow/20 backdrop-blur-[2px] animate-fade-in"></div>
@@ -440,10 +292,9 @@ const ChildDashboard: React.FC = () => {
       <div className="bg-white rounded-b-[3rem] shadow-sm p-6 mb-6 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-yellow via-brand-red to-brand-blue"></div>
         
-        {/* Top Bar */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
-             <div className="relative group cursor-pointer" onClick={() => setShowAvatarEditor(true)}>
+             <div className="relative group cursor-pointer" onClick={() => setShowProfilePhotoModal(true)}>
                 <div className="w-14 h-14 rounded-full border-4 border-brand-yellow bg-gray-100 overflow-hidden">
                     <AvatarDisplay user={currentUser} />
                 </div>
@@ -469,16 +320,14 @@ const ChildDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Card (Clickable) */}
+        {/* Stats Card */}
         <div 
             onClick={() => setShowHistory(true)}
             className="w-full bg-brand-dark rounded-2xl p-5 text-white flex justify-around items-center shadow-lg shadow-brand-dark/20 hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden group cursor-pointer"
         >
-          {/* Background Pattern */}
           <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/5 rounded-full blur-2xl"></div>
           <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-brand-yellow/10 rounded-full blur-xl"></div>
 
-          {/* Points Section */}
           <div className="text-center relative z-10 flex flex-col items-center">
             <div className="flex items-center justify-center gap-1 text-brand-yellow mb-1">
               <Star fill="currentColor" size={22} />
@@ -486,7 +335,6 @@ const ChildDashboard: React.FC = () => {
             <span className="text-3xl font-display font-bold tracking-tight">{currentUser.points}</span>
             <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium mb-1">Body</p>
             
-            {/* Exchange Button - Always Visible now */}
             {(currentUser.points || 0) >= 10 && (
                 <button 
                     onClick={handleExchangeOpen}
@@ -499,7 +347,6 @@ const ChildDashboard: React.FC = () => {
 
           <div className="w-px h-12 bg-gradient-to-b from-transparent via-white/20 to-transparent relative z-10"></div>
           
-          {/* Money Section */}
           <div className="text-center relative z-10">
              <div className="flex items-center justify-center gap-1 text-brand-green mb-1">
               <Coins size={22} />
@@ -507,14 +354,11 @@ const ChildDashboard: React.FC = () => {
             <span className="text-3xl font-display font-bold tracking-tight">{currentUser.balance} <span className="text-lg">Kč</span></span>
             <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium">Kasička</p>
           </div>
-          
-          {/* History indicator */}
           <div className="absolute top-3 right-3 opacity-30">
               <History size={14} />
           </div>
         </div>
 
-        {/* Daily Progress */}
         {todaysTotal > 0 && (
           <div className="mt-6">
              <div className="flex justify-between text-xs font-bold text-gray-400 mb-1">
@@ -533,7 +377,6 @@ const ChildDashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Allowance Widget */}
       {allowanceProgress && (
         <div className="px-4 mb-6">
           <div className="bg-gradient-to-r from-pink-500 to-rose-500 rounded-2xl p-5 text-white shadow-lg shadow-pink-200 relative overflow-hidden">
@@ -561,26 +404,18 @@ const ChildDashboard: React.FC = () => {
                           style={{ width: `${Math.min(100, (allowanceProgress.earnedPoints / allowanceProgress.pointThreshold) * 100)}%` }}
                       ></div>
                   </div>
-                  <p className="text-xs mt-2 text-pink-100 font-medium">
-                      {allowanceProgress.earnedPoints >= allowanceProgress.pointThreshold 
-                          ? "🎉 Skvělé! Máš nárok na plné kapesné." 
-                          : `Získej ještě ${allowanceProgress.pointThreshold - allowanceProgress.earnedPoints} bodů pro plnou částku.`}
-                  </p>
               </div>
           </div>
         </div>
       )}
 
-      {/* Savings Goals Section */}
+      {/* Goals */}
       <div className="px-4 mb-6 animate-fade-in">
          <div className="flex justify-between items-center mb-3">
              <h3 className="font-display font-bold text-lg text-brand-dark flex items-center gap-2">
                  <Target className="text-brand-red" size={20} /> Na co šetřím
              </h3>
-             <button 
-                onClick={openAddGoalModal}
-                className="bg-white p-2 rounded-full text-brand-dark shadow-sm hover:bg-gray-50"
-             >
+             <button onClick={openAddGoalModal} className="bg-white p-2 rounded-full text-brand-dark shadow-sm hover:bg-gray-50">
                  <Plus size={18} />
              </button>
          </div>
@@ -598,13 +433,8 @@ const ChildDashboard: React.FC = () => {
                      
                      return (
                          <div key={goal.id} onClick={() => openEditGoalModal(goal)} className="flex-shrink-0 w-48 bg-white rounded-2xl p-3 shadow-sm border border-gray-100 relative snap-start cursor-pointer hover:shadow-md transition-shadow group">
-                             <button 
-                                type="button"
-                                onClick={(e) => requestDeleteGoal(e, goal.id)} 
-                                className="absolute top-2 right-2 p-2 bg-white rounded-full text-gray-400 hover:text-red-500 shadow-md transition-colors z-20"
-                                title="Smazat"
-                             >
-                                <Trash2 size={18}/>
+                             <button type="button" onClick={(e) => requestDeleteGoal(e, goal.id)} className="absolute top-2 right-2 p-3 bg-white rounded-full text-gray-400 hover:text-red-500 shadow-md transition-colors z-20">
+                                <Trash2 size={20}/>
                              </button>
                              
                              <div className="h-24 bg-gray-100 rounded-xl mb-3 overflow-hidden relative">
@@ -627,12 +457,8 @@ const ChildDashboard: React.FC = () => {
                                  <span className={isAchieved ? "text-green-600 font-bold" : ""}>{currentUser.balance} Kč</span>
                                  <span>{goal.targetAmount} Kč</span>
                              </div>
-                             
                              <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                                 <div 
-                                    className={`h-full rounded-full transition-all duration-1000 ${isAchieved ? 'bg-green-500' : 'bg-brand-yellow'}`} 
-                                    style={{ width: `${percent}%` }}
-                                 ></div>
+                                 <div className={`h-full rounded-full ${isAchieved ? 'bg-green-500' : 'bg-brand-yellow'}`} style={{ width: `${percent}%` }}></div>
                              </div>
                          </div>
                      );
@@ -641,618 +467,402 @@ const ChildDashboard: React.FC = () => {
          </div>
       </div>
 
-      {/* Add Custom Task Button */}
-      <div className="px-4 mb-6">
-          <button 
-            onClick={() => setShowCustomTaskModal(true)}
-            className="w-full py-3 bg-gradient-to-r from-brand-yellow to-orange-400 rounded-xl shadow-lg shadow-brand-yellow/20 text-brand-dark font-bold flex items-center justify-center gap-2 hover:scale-[1.02] active:scale-95 transition-all"
-          >
-              <Sparkles size={20} className="animate-pulse" />
-              Udělal jsem něco navíc!
-          </button>
-      </div>
+      {/* Task Tabs */}
+      <div className="px-4 mb-24">
+         <div className="bg-white/80 backdrop-blur-sm p-1.5 rounded-2xl flex shadow-sm mb-4 border border-white sticky top-4 z-10">
+             <button 
+                onClick={() => setActiveTab('todo')}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'todo' ? 'bg-brand-blue text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
+             >
+                Moje úkoly ({todoTasks.length})
+             </button>
+             <button 
+                onClick={() => setActiveTab('done')}
+                className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'done' ? 'bg-brand-green text-white shadow-md' : 'text-gray-500 hover:bg-gray-100'}`}
+             >
+                Hotovo ({doneList.length})
+             </button>
+         </div>
 
-      {/* Tab Navigation */}
-      <div className="px-4 mb-4">
-        <div className="flex p-1 bg-gray-200/50 rounded-xl">
-           <button 
-              onClick={() => setActiveTab('todo')}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === 'todo' ? 'bg-white text-brand-dark shadow-sm' : 'text-gray-500 hover:bg-white/50'}`}
-           >
-              <ListTodo size={16} />
-              Moje úkoly
-              {todoTasks.length > 0 && (
-                 <span className="bg-brand-red text-white text-[10px] px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                    {todoTasks.length}
-                 </span>
-              )}
-           </button>
-           <button 
-              onClick={() => setActiveTab('done')}
-              className={`flex-1 py-2.5 text-sm font-bold rounded-lg flex items-center justify-center gap-2 transition-all ${activeTab === 'done' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-500 hover:bg-white/50'}`}
-           >
-              <CheckCircle2 size={16} />
-              Hotovo
-           </button>
-        </div>
-      </div>
-
-      {/* Task Lists */}
-      <div className="px-4 space-y-4 animate-slide-up">
-
-        {/* Active Tasks Tab */}
-        {activeTab === 'todo' && (
-          <div className="space-y-3">
-            {todoTasks.length === 0 ? (
-              <div className="text-center py-12 px-4">
-                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-500 text-4xl">
-                    🎉
-                </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-1">Všechno hotovo!</h3>
-                <p className="text-gray-500 text-sm">Užij si volno nebo požádej rodiče o další úkoly.</p>
-              </div>
-            ) : (
-              todoTasks.map(task => {
-                const isFuture = task.date > todayStr;
-                return (
-                  <button 
-                    key={task.id} 
-                    disabled={isFuture}
-                    onClick={() => { if (!isFuture) { setSelectedTask(task); setPreviewImage(null); } }}
-                    className={`w-full text-left bg-white p-4 rounded-2xl shadow-sm border border-gray-100 relative overflow-hidden transition-transform group ${isFuture ? 'opacity-60 cursor-not-allowed bg-gray-50' : 'active:scale-[0.98]'}`}
-                  >
-                    {task.status === TaskStatus.REJECTED && (
-                        <div className="bg-red-100 text-red-600 text-[10px] font-bold px-2 py-1 rounded absolute top-3 right-3 flex items-center gap-1">
-                            <X size={10} strokeWidth={3} /> Opravit
+         <div className="space-y-4">
+             {activeTab === 'todo' && (
+                 <>
+                    {todoTasks.length === 0 ? (
+                        <div className="text-center py-12 text-gray-400">
+                           <Sun size={48} className="mx-auto mb-4 text-brand-yellow opacity-50" />
+                           <p className="font-bold text-lg">Všechno hotovo!</p>
+                           <p className="text-sm">Užívej si volno nebo si přidej vlastní úkol.</p>
                         </div>
+                    ) : (
+                        todoTasks.map(task => {
+                            const isFuture = task.date > todayStr;
+                            return (
+                                <div key={task.id} onClick={!isFuture ? () => setSelectedTask(task) : undefined} className={`bg-white rounded-2xl p-4 shadow-sm border border-gray-100 active:scale-[0.98] transition-all flex gap-4 ${isFuture ? 'opacity-60 grayscale cursor-not-allowed' : 'cursor-pointer'}`}>
+                                    <div className={`w-3 h-auto rounded-full ${task.status === TaskStatus.REJECTED ? 'bg-red-500' : isFuture ? 'bg-gray-300' : 'bg-brand-blue'}`}></div>
+                                    <div className="flex-1 py-1">
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="text-xs font-bold text-gray-400 flex items-center gap-1">
+                                                {isFuture ? <Lock size={12}/> : <Calendar size={12}/>} 
+                                                {new Date(task.date).toLocaleDateString('cs-CZ')}
+                                            </span>
+                                            <div className="flex gap-2">
+                                                 <span className="text-xs font-bold text-brand-blue bg-blue-50 px-2 py-0.5 rounded-full">+{task.rewardPoints}b</span>
+                                                 {task.rewardMoney > 0 && <span className="text-xs font-bold text-brand-green bg-green-50 px-2 py-0.5 rounded-full">+{task.rewardMoney} Kč</span>}
+                                            </div>
+                                        </div>
+                                        <h4 className="font-bold text-gray-800 text-lg mb-1">{task.title}</h4>
+                                        <p className="text-sm text-gray-500 line-clamp-1">{task.description}</p>
+                                        {task.status === TaskStatus.REJECTED && (
+                                            <div className="mt-2 bg-red-50 text-red-600 text-xs p-2 rounded-lg font-medium flex items-center gap-2">
+                                                <AlertCircle size={14}/> {task.feedback}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
                     )}
-                    <div className="flex justify-between items-start">
-                      <div className="pr-16">
-                        <div className="flex items-center gap-2 mb-1">
-                           {isFuture ? (
-                               <div className="text-gray-400 bg-gray-100 rounded-full p-0.5"><Lock size={12} /></div>
-                           ) : task.status === TaskStatus.REJECTED ? (
-                               <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                           ) : (
-                               <div className="w-2 h-2 bg-brand-blue rounded-full"></div>
-                           )}
-                           <span className={`text-xs flex items-center gap-1 ${isFuture ? 'text-orange-600 font-bold bg-orange-50 px-1.5 rounded' : 'text-gray-400'}`}>
-                              <Calendar size={10}/> {new Date(task.date).toLocaleDateString('cs-CZ')}
-                           </span>
-                        </div>
-                        <h3 className={`font-bold text-lg transition-colors leading-snug ${isFuture ? 'text-gray-500' : 'text-gray-800 group-hover:text-brand-blue'}`}>
-                            {task.title}
-                        </h3>
-                      </div>
-                      
-                      <div className={`absolute bottom-4 right-4 flex flex-col items-end gap-1 ${isFuture ? 'opacity-50' : ''}`}>
-                        <div className="bg-brand-yellow/10 text-brand-dark font-bold px-3 py-1.5 rounded-xl text-sm border border-brand-yellow/20">
-                            +{task.rewardPoints} ★
-                        </div>
-                        {task.rewardMoney > 0 && (
-                            <div className="text-xs font-bold text-brand-green bg-green-50 px-2 py-0.5 rounded-md">
-                                +{task.rewardMoney} Kč
-                            </div>
-                        )}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        )}
+                    
+                    <button onClick={() => setShowCustomTaskModal(true)} className="w-full py-4 border-2 border-dashed border-gray-300 rounded-2xl text-gray-500 font-bold flex items-center justify-center gap-2 hover:bg-white hover:border-brand-yellow hover:text-brand-yellow transition-all mt-6">
+                        <Sparkles size={20} /> Udělal jsem něco navíc!
+                    </button>
+                 </>
+             )}
 
-        {/* Done Tab */}
-        {activeTab === 'done' && (
-           <div className="space-y-3">
-               {doneList.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400">
-                      <Clock size={48} className="mx-auto mb-3 opacity-20" />
-                      <p className="text-sm">Zatím žádná historie.</p>
-                  </div>
-               ) : (
-                   doneList.map(task => (
-                    <div key={task.id} className={`p-4 rounded-2xl border flex justify-between items-center ${task.status === TaskStatus.APPROVED ? 'bg-green-50/50 border-green-100' : 'bg-white border-gray-100 opacity-75'}`}>
-                      <div className="flex-1">
-                        <h3 className={`font-bold ${task.status === TaskStatus.APPROVED ? 'text-green-900' : 'text-gray-700'}`}>{task.title}</h3>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                           {task.status === TaskStatus.APPROVED ? (
-                               <span className="text-xs font-bold text-green-600 flex items-center gap-1"><CheckCircle2 size={12}/> Schváleno</span>
-                           ) : (
-                               <span className="text-xs font-bold text-gray-500 flex items-center gap-1"><Clock size={12}/> Čeká na rodiče</span>
-                           )}
-                           {task.createdBy === UserRole.CHILD && (
-                               <span className="text-xs bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-full flex items-center gap-1 font-bold">
-                                   <Sparkles size={10}/> Vlastní
-                               </span>
-                           )}
-                           <span className="text-xs text-gray-400">• {new Date(task.date).toLocaleDateString('cs-CZ')}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="text-right flex items-center gap-3">
-                        <div>
-                            <div className="font-bold text-gray-400 text-sm">
-                                {task.rewardPoints > 0 ? `+${task.rewardPoints} ★` : '---'}
-                            </div>
-                            {task.rewardMoney > 0 && <div className="text-xs font-bold text-green-600">+{task.rewardMoney} Kč</div>}
-                        </div>
-                        
-                        {/* Child can delete their pending custom tasks */}
-                        {task.status === TaskStatus.PENDING_APPROVAL && task.createdBy === UserRole.CHILD && (
-                            <button 
-                                onClick={(e) => { e.stopPropagation(); requestDeleteCustomTask(task.id); }} 
-                                className="p-2 bg-gray-100 rounded-full text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                            >
-                                <Trash2 size={16} />
-                            </button>
-                        )}
-                      </div>
-                    </div>
-                   ))
-               )}
-           </div>
-        )}
+             {activeTab === 'done' && (
+                 doneList.length === 0 ? (
+                     <div className="text-center py-10 text-gray-400">Zatím nic splněno.</div>
+                 ) : (
+                     doneList.map(task => (
+                         <div key={task.id} className="bg-white/60 rounded-2xl p-4 border border-gray-100 flex gap-4 opacity-80 relative">
+                             {task.status === TaskStatus.PENDING_APPROVAL && task.createdBy === UserRole.CHILD && (
+                                 <button onClick={() => requestDeleteCustomTask(task.id)} className="absolute top-2 right-2 p-2 text-gray-300 hover:text-red-500 z-10"><Trash2 size={16}/></button>
+                             )}
+                             <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${task.status === TaskStatus.APPROVED ? 'bg-green-100 text-brand-green' : 'bg-yellow-100 text-brand-yellow'}`}>
+                                 {task.status === TaskStatus.APPROVED ? <CheckCircle2 size={24} /> : <Clock size={24} />}
+                             </div>
+                             <div className="py-1">
+                                 <h4 className="font-bold text-gray-700 line-through decoration-gray-300 decoration-2">{task.title}</h4>
+                                 <p className="text-xs font-bold text-gray-400 uppercase mt-1">
+                                     {task.status === TaskStatus.APPROVED ? 'Schváleno' : 'Čeká na rodiče'}
+                                 </p>
+                             </div>
+                         </div>
+                     ))
+                 )
+             )}
+         </div>
       </div>
 
-      {/* Task Detail Modal (for Standard Tasks) */}
+      {/* Task Detail Modal */}
       {selectedTask && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up max-h-[90vh] overflow-y-auto shadow-2xl">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl animate-scale-in">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                  <h2 className="text-2xl font-display font-bold text-brand-dark mb-1">{selectedTask.title}</h2>
+                  <div className="flex gap-2">
+                      <span className="text-sm font-bold text-brand-blue bg-blue-50 px-3 py-1 rounded-full flex items-center gap-1"><Star size={14} fill="currentColor"/> {selectedTask.rewardPoints} bodů</span>
+                      {selectedTask.rewardMoney > 0 && <span className="text-sm font-bold text-brand-green bg-green-50 px-3 py-1 rounded-full flex items-center gap-1"><Coins size={14}/> {selectedTask.rewardMoney} Kč</span>}
+                  </div>
+              </div>
+              <button onClick={() => setSelectedTask(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+            </div>
             
-            <div className="text-center mb-6">
-                <div className="inline-block p-3 bg-brand-yellow/20 rounded-full mb-4">
-                   <Star className="text-brand-dark w-8 h-8 fill-current" />
-                </div>
-                <h3 className="text-2xl font-display font-bold text-brand-dark mb-2 leading-tight">{selectedTask.title}</h3>
-                
-                <div className="flex justify-center gap-3 mb-6">
-                    <span className="bg-gray-100 text-gray-600 px-4 py-1.5 rounded-full text-sm font-bold border border-gray-200">+{selectedTask.rewardPoints} bodů</span>
-                    {selectedTask.rewardMoney > 0 && (
-                        <span className="bg-green-50 text-brand-green px-4 py-1.5 rounded-full text-sm font-bold border border-green-100">+{selectedTask.rewardMoney} Kč</span>
-                    )}
-                </div>
-
-                <p className="text-gray-600 bg-slate-50 p-5 rounded-2xl text-sm text-left mb-4 border border-slate-100 leading-relaxed">
-                    {selectedTask.description || "Bez popisu."}
-                </p>
-                
+            <div className="bg-slate-50 p-4 rounded-2xl mb-6">
+                <p className="text-gray-700 leading-relaxed">{selectedTask.description || "Tento úkol nemá popis."}</p>
                 {selectedTask.feedback && (
-                    <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-sm text-left border border-red-100 flex gap-3 items-start">
-                        <XCircle size={20} className="flex-shrink-0 mt-0.5" />
-                        <div>
-                            <strong className="block mb-1 text-red-700">Co opravit:</strong>
-                            {selectedTask.feedback}
-                        </div>
+                    <div className="mt-3 pt-3 border-t border-slate-200">
+                        <p className="text-xs font-bold text-red-500 uppercase mb-1">Poznámka od rodiče:</p>
+                        <p className="text-sm text-red-600 italic">"{selectedTask.feedback}"</p>
                     </div>
                 )}
             </div>
 
-            <div className="border-t border-gray-100 pt-6">
-                <ImageUploader 
-                    onImageSelected={setPreviewImage} 
-                    initialImage={previewImage} 
-                    label="Fotka hotového úkolu (nepovinné)" 
-                />
+            <div className="mb-6">
+               <ImageUploader 
+                  onImageSelected={setPreviewImage} 
+                  label="Vyfoť důkaz (nepovinné)"
+               />
             </div>
 
-            <div className="flex gap-3">
-              <button
-                onClick={() => { setSelectedTask(null); setPreviewImage(null); }}
-                className="flex-1 py-3.5 font-bold text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
-              >
-                Zavřít
-              </button>
-              <button
-                onClick={submitTask}
-                className="flex-[2] py-3.5 font-bold text-white bg-brand-green rounded-xl shadow-lg shadow-brand-green/30 flex items-center justify-center gap-2 active:scale-95 transition-transform"
-              >
-                <CheckCircle2 /> Splnit úkol
-              </button>
-            </div>
+            <button 
+                onClick={submitTask} 
+                className="w-full py-4 bg-brand-green text-white font-bold text-lg rounded-2xl shadow-lg shadow-green-200 hover:bg-green-600 transition-all active:scale-95 flex items-center justify-center gap-2"
+            >
+                <CheckCircle2 size={24} /> Splněno!
+            </button>
           </div>
         </div>
       )}
 
-      {/* Daily Reward Modal */}
-      {showDailyRewardModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 text-center shadow-2xl animate-scale-in relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-brand-yellow to-orange-400"></div>
-                  <div className="absolute -top-10 -right-10 w-32 h-32 bg-yellow-100 rounded-full blur-2xl"></div>
-                  
-                  <div className="inline-block p-4 bg-yellow-100 rounded-full text-brand-yellow mb-4 animate-bounce">
-                      <Sun size={48} fill="currentColor" />
-                  </div>
-                  
-                  <h2 className="text-2xl font-display font-bold text-slate-800 mb-2">Vítej zpět!</h2>
-                  <p className="text-slate-500 mb-6">Tady je tvá denní odměna za přihlášení.</p>
-                  
-                  <div className="bg-gradient-to-br from-brand-yellow to-orange-400 text-white rounded-2xl p-6 mb-8 shadow-lg transform rotate-2">
-                      <div className="text-4xl font-bold font-display flex items-center justify-center gap-2">
-                          +10 <Star fill="currentColor" size={32}/>
-                      </div>
-                      <div className="text-xs uppercase font-bold tracking-widest opacity-80 mt-1">Bodů</div>
-                  </div>
-
-                  <button 
-                    onClick={() => setShowDailyRewardModal(false)}
-                    className="w-full py-3.5 bg-brand-dark text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all active:scale-95"
-                  >
-                      Paráda, beru to!
-                  </button>
-              </div>
-          </div>
-      )}
-
       {/* Custom Task Modal */}
       {showCustomTaskModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2"><Sparkles className="text-brand-yellow"/> Mám hotovo navíc</h3>
-                    <button onClick={() => setShowCustomTaskModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20} className="text-gray-500"/></button>
-                </div>
-
-                <div className="space-y-4 mb-6">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Co jsi udělal?</label>
-                        <input 
-                            type="text" 
-                            placeholder="např. Vyskládal jsem myčku"
-                            value={customTaskTitle}
-                            onChange={(e) => setCustomTaskTitle(e.target.value)}
-                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Popis (volitelné)</label>
-                        <textarea 
-                            placeholder="Kratký popis..."
-                            value={customTaskDesc}
-                            onChange={(e) => setCustomTaskDesc(e.target.value)}
-                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow h-20 text-gray-900"
-                        />
-                    </div>
-                    <div>
-                         <ImageUploader 
-                            onImageSelected={setCustomTaskImage} 
-                            initialImage={customTaskImage} 
-                            label="Důkaz (fotka)" 
-                        />
-                    </div>
-                </div>
-                
-                <button 
-                    onClick={submitCustomTask}
-                    disabled={!customTaskTitle.trim()}
-                    className="w-full py-3.5 bg-brand-dark text-white font-bold rounded-xl shadow-lg shadow-brand-dark/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                    <CheckCircle2 /> Odeslat ke schválení
-                </button>
-            </div>
-          </div>
-      )}
-
-       {/* Add/Edit Goal Modal */}
-       {showGoalModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2">
-                        <Target className="text-brand-red"/> 
-                        {editingGoalId ? 'Upravit přání' : 'Nové přání'}
-                    </h3>
-                    <button onClick={() => setShowGoalModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20} className="text-gray-500"/></button>
-                </div>
-
-                <div className="space-y-4 mb-6">
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Co si přeješ?</label>
-                        <input 
-                            type="text" 
-                            placeholder="např. Nové Lego"
-                            value={newGoalTitle}
-                            onChange={(e) => setNewGoalTitle(e.target.value)}
-                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 mb-1">Cena (Kč)</label>
-                        <input 
-                            type="number" 
-                            min="1"
-                            placeholder="100"
-                            value={newGoalAmount}
-                            onChange={(e) => setNewGoalAmount(Number(e.target.value))}
-                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow font-bold text-lg text-gray-900"
-                        />
-                    </div>
-                    <div>
-                        <ImageUploader 
-                            onImageSelected={setNewGoalImage} 
-                            initialImage={newGoalImage} 
-                            label="Obrázek přání (volitelné)" 
-                        />
-                    </div>
-                </div>
-                
-                <div className="flex gap-3">
-                    {editingGoalId && (
-                        <button 
-                            onClick={(e) => requestDeleteGoal(e, editingGoalId)}
-                            className="p-3.5 bg-red-50 text-red-500 rounded-xl hover:bg-red-100 transition-colors"
-                            title="Smazat přání"
-                        >
-                            <Trash2 size={20} />
-                        </button>
-                    )}
-                    <button 
-                        onClick={handleSaveGoal}
-                        disabled={!newGoalTitle.trim() || newGoalAmount <= 0}
-                        className="flex-1 py-3.5 bg-brand-dark text-white font-bold rounded-xl shadow-lg shadow-brand-dark/20 disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                        {editingGoalId ? <Pencil size={20}/> : <Plus size={20} />} 
-                        {editingGoalId ? 'Uložit změny' : 'Přidat do seznamu'}
-                    </button>
-                </div>
-            </div>
-          </div>
-      )}
-
-      {/* Goal Delete Confirmation Modal */}
-      {deleteGoalConfirmation.isOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
-                  <div className="flex flex-col items-center text-center mb-6">
-                      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
-                          <AlertTriangle size={32} />
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-800">Smazat toto přání?</h3>
-                      <p className="text-gray-500 mt-2 text-sm">Tato akce je nevratná.</p>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl animate-scale-in">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-brand-dark">Můj vlastní úkol</h3>
+                      <button onClick={() => setShowCustomTaskModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
                   </div>
-                  <div className="flex gap-3">
-                      <button 
-                          onClick={() => setDeleteGoalConfirmation({ isOpen: false, goalId: null })}
-                          className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
-                      >
-                          Ne, nechat
-                      </button>
-                      <button 
-                          onClick={confirmDeleteGoal}
-                          className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
-                      >
-                          Ano, smazat
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Task Delete Confirmation Modal */}
-      {deleteTaskConfirmation.isOpen && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
-                  <div className="flex flex-col items-center text-center mb-6">
-                      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
-                          <AlertTriangle size={32} />
-                      </div>
-                      <h3 className="text-xl font-bold text-gray-800">Smazat tento úkol?</h3>
-                      <p className="text-gray-500 mt-2 text-sm">Úkol bude trvale odstraněn.</p>
-                  </div>
-                  <div className="flex gap-3">
-                      <button 
-                          onClick={() => setDeleteTaskConfirmation({ isOpen: false, taskId: null })}
-                          className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
-                      >
-                          Ne, nechat
-                      </button>
-                      <button 
-                          onClick={confirmDeleteTask}
-                          className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
-                      >
-                          Ano, smazat
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Exchange Modal */}
-      {showExchange && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl">
-                  <div className="flex justify-between items-start mb-6">
+                  
+                  <div className="space-y-4 mb-6">
                       <div>
-                          <h3 className="text-xl font-bold text-brand-dark">Proměnit body</h3>
-                          <p className="text-sm text-gray-500">Kurz: 10 bodů = 1 Kč</p>
+                          <label className="block text-sm font-bold text-gray-500 mb-1">Co jsi udělal/a?</label>
+                          <input type="text" value={customTaskTitle} onChange={(e) => setCustomTaskTitle(e.target.value)} placeholder="např. Uklidil jsem si hračky" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none font-bold text-gray-900"/>
                       </div>
-                      <button onClick={() => setShowExchange(false)} className="p-2 hover:bg-gray-100 rounded-full">
-                          <X size={20} className="text-gray-400"/>
-                      </button>
-                  </div>
-
-                  <div className="bg-gradient-to-br from-slate-50 to-gray-100 rounded-3xl p-6 mb-6 text-center relative overflow-hidden border border-gray-200">
-                      <div className="flex items-center justify-center gap-6 mb-6">
-                          <div className="text-brand-dark flex flex-col items-center">
-                              <div className="w-12 h-12 bg-brand-yellow/20 rounded-full flex items-center justify-center mb-2 text-brand-dark">
-                                <Star size={24} fill="currentColor"/>
-                              </div>
-                              <div className="font-bold text-3xl font-display">{exchangePoints}</div>
-                              <div className="text-xs font-bold text-gray-400 uppercase">bodů</div>
-                          </div>
-                          <div className="text-gray-300">
-                             <ArrowRightLeft size={24} />
-                          </div>
-                          <div className="text-brand-green flex flex-col items-center">
-                              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mb-2 text-brand-green">
-                                <Coins size={24}/>
-                              </div>
-                              <div className="font-bold text-3xl font-display">{exchangePoints / 10} Kč</div>
-                              <div className="text-xs font-bold text-gray-400 uppercase">do kasičky</div>
-                          </div>
+                      <div>
+                          <label className="block text-sm font-bold text-gray-500 mb-1">Popis (volitelné)</label>
+                          <textarea value={customTaskDesc} onChange={(e) => setCustomTaskDesc(e.target.value)} placeholder="Detaily..." className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none text-gray-900" rows={2}/>
                       </div>
-                      
-                      <div className="px-2">
-                        <input 
-                            type="range" 
-                            min="0" 
-                            max={maxExchangeablePoints} 
-                            step="10" 
-                            value={exchangePoints}
-                            onChange={(e) => setExchangePoints(Number(e.target.value))}
-                            className="w-full accent-brand-green h-3 bg-white rounded-full appearance-none cursor-pointer shadow-inner"
-                        />
-                      </div>
-                      <div className="flex justify-between mt-3 text-xs text-gray-400 font-bold px-1">
-                          <span>0</span>
-                          <span>{maxExchangeablePoints}</span>
-                      </div>
+                      <ImageUploader 
+                          onImageSelected={setCustomTaskImage} 
+                          label="Fotka (doporučeno)"
+                      />
                   </div>
 
                   <button 
-                      onClick={submitExchange}
-                      disabled={exchangePoints === 0}
-                      className="w-full py-4 bg-brand-green text-white font-bold rounded-xl shadow-lg shadow-brand-green/20 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-green/90 transition-all active:scale-95 text-lg flex items-center justify-center gap-2"
+                      onClick={submitCustomTask}
+                      disabled={!customTaskTitle.trim()}
+                      className="w-full py-4 bg-brand-blue text-white font-bold text-lg rounded-2xl shadow-lg shadow-blue-200 hover:bg-blue-600 transition-all active:scale-95 disabled:opacity-50"
                   >
-                      <Trophy size={20} /> Potvrdit výměnu
+                      Odeslat ke schválení
                   </button>
+              </div>
+          </div>
+      )}
+
+      {/* Goal Modal */}
+      {showGoalModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-brand-dark">{editingGoalId ? 'Upravit přání' : 'Nové přání'}</h3>
+                      <button onClick={() => setShowGoalModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                  </div>
+
+                  <div className="space-y-4 mb-6">
+                      <div>
+                          <label className="block text-sm font-bold text-gray-500 mb-1">Co si přeješ?</label>
+                          <input type="text" value={newGoalTitle} onChange={(e) => setNewGoalTitle(e.target.value)} placeholder="např. Lego Star Wars" className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none font-bold text-gray-900"/>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-bold text-gray-500 mb-1">Kolik to stojí (Kč)?</label>
+                          <input type="number" min="1" value={newGoalAmount} onChange={(e) => setNewGoalAmount(Number(e.target.value))} className="w-full p-4 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none font-bold text-gray-900"/>
+                      </div>
+                      <div className="mb-2">
+                         <label className="block text-sm font-bold text-gray-500 mb-1">Obrázek přání</label>
+                         <input type="text" value={newGoalImage || ''} onChange={(e) => setNewGoalImage(e.target.value)} placeholder="URL obrázku (volitelné)" className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl text-sm text-gray-900 mb-2"/>
+                         {newGoalImage && <div className="h-32 rounded-xl overflow-hidden bg-gray-100"><img src={newGoalImage} className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')}/></div>}
+                      </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                      {editingGoalId && (
+                           <button onClick={(e) => requestDeleteGoal(e, editingGoalId)} className="p-4 bg-red-50 text-red-500 rounded-xl font-bold border border-red-100 hover:bg-red-100"><Trash2 size={24}/></button>
+                      )}
+                      <button onClick={handleSaveGoal} disabled={!newGoalTitle.trim() || newGoalAmount <= 0} className="flex-1 py-4 bg-brand-yellow text-brand-dark font-bold text-lg rounded-2xl shadow-lg hover:bg-yellow-400 transition-all active:scale-95 disabled:opacity-50">
+                          {editingGoalId ? 'Uložit změny' : 'Přidat přání'}
+                      </button>
+                  </div>
               </div>
           </div>
       )}
 
       {/* History Modal */}
       {showHistory && (
-         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up max-h-[85vh] flex flex-col shadow-2xl">
-               <div className="flex justify-between items-center mb-6">
-                   <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2">
-                       <History size={24} className="text-brand-blue"/> Historie odměn
-                   </h3>
-                   <button onClick={() => setShowHistory(false)} className="p-2 hover:bg-gray-100 rounded-full">
-                       <X size={20} className="text-gray-400"/>
-                   </button>
-               </div>
-
-               <div className="overflow-y-auto flex-1 -mx-2 px-2">
-                   {historyItems.length === 0 ? (
-                       <div className="text-center text-gray-400 py-12 flex flex-col items-center gap-3">
-                           <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300">
-                              <ListTodo size={32} />
-                           </div>
-                           <p>Zatím tu nic není. Splň nějaký úkol!</p>
-                       </div>
-                   ) : (
-                       <div className="space-y-3">
-                           {historyItems.map((item, index) => (
-                               <div key={`${item.type}-${item.id}-${index}`} className="flex items-center justify-between p-4 rounded-2xl bg-gray-50 border border-gray-100 hover:bg-white hover:shadow-sm transition-all">
-                                   <div className="flex items-center gap-4">
-                                       <div className={`w-10 h-10 rounded-full flex items-center justify-center shadow-sm ${item.type === 'PAYOUT' ? 'bg-blue-500 text-white' : 'bg-brand-yellow text-brand-dark'}`}>
-                                           {item.type === 'PAYOUT' ? <Wallet size={18}/> : <CheckCircle2 size={18}/>}
-                                       </div>
-                                       <div>
-                                           <div className="font-bold text-gray-700">{item.title}</div>
-                                           <div className="text-xs text-gray-400">{new Date(item.date).toLocaleDateString('cs-CZ')}</div>
-                                       </div>
-                                   </div>
-                                   <div className="text-right">
-                                       {item.type === 'TASK' ? (
-                                           <>
-                                               <div className="font-bold text-brand-dark">+{item.points} ★</div>
-                                               {item.money > 0 && <div className="text-xs font-bold text-brand-green">+{item.money} Kč</div>}
-                                           </>
-                                       ) : (
-                                           <div className="font-bold text-blue-600">Vyplaceno</div>
-                                       )}
-                                   </div>
-                               </div>
-                           ))}
-                       </div>
-                   )}
-               </div>
-            </div>
-         </div>
-      )}
-
-      {/* Settings Modal */}
-      {showSettings && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-4 animate-fade-in">
-              <div className="bg-white w-full max-w-md rounded-[2rem] p-6 animate-slide-up shadow-2xl">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-md rounded-[2rem] p-6 shadow-2xl animate-scale-in h-[80vh] flex flex-col">
                   <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2">
-                          <Settings className="text-gray-500"/> Nastavení
-                      </h3>
-                      <button onClick={() => setShowSettings(false)} className="p-2 hover:bg-gray-100 rounded-full">
-                          <X size={20} className="text-gray-400"/>
-                      </button>
+                      <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2"><History/> Historie</h3>
+                      <button onClick={() => setShowHistory(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
                   </div>
-
-                  <div className="space-y-6">
-                      <div className="text-center">
-                           <div className="w-20 h-20 rounded-full mx-auto mb-2 overflow-hidden border-2 border-gray-100">
-                                <AvatarDisplay user={currentUser} />
-                           </div>
-                          <h4 className="font-bold text-lg">{currentUser.name}</h4>
-                      </div>
-
-                      <div className="border-t border-gray-100 pt-4">
-                          <h5 className="font-bold text-gray-700 mb-3 flex items-center gap-2"><Lock size={16}/> Nastavit PIN (4 čísla)</h5>
-                          <div className="space-y-3">
-                              <input 
-                                type="password" 
-                                placeholder="Nový PIN"
-                                maxLength={4}
-                                value={newPin}
-                                onChange={(e) => setNewPin(e.target.value)}
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900 text-center font-bold tracking-widest"
-                              />
-                              <input 
-                                type="password" 
-                                placeholder="Potvrdit PIN"
-                                maxLength={4}
-                                value={confirmPin}
-                                onChange={(e) => setConfirmPin(e.target.value)}
-                                className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-yellow text-gray-900 text-center font-bold tracking-widest"
-                              />
-                          </div>
-                          <p className="text-xs text-gray-400 mt-2 text-center">Používá se pro přihlášení k tvému profilu.</p>
-                      </div>
-
-                      {settingsMessage && (
-                          <div className={`p-3 rounded-lg text-sm font-bold text-center ${settingsMessage.includes('uložen') ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
-                              {settingsMessage}
-                          </div>
+                  
+                  <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                      {historyItems.length === 0 ? (
+                          <div className="text-center text-gray-400 py-10">Zatím prázdno...</div>
+                      ) : (
+                          historyItems.map((item, idx) => (
+                              <div key={`${item.id}-${idx}`} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                  <div>
+                                      <div className="font-bold text-gray-800 text-sm">{item.title}</div>
+                                      <div className="text-xs text-gray-400">{new Date(item.date).toLocaleDateString('cs-CZ')}</div>
+                                  </div>
+                                  <div className="text-right">
+                                      {item.points !== 0 && <div className="font-bold text-brand-blue text-sm">+{item.points}b</div>}
+                                      {item.money !== 0 && <div className={`font-bold text-sm ${item.money > 0 ? 'text-brand-green' : 'text-gray-500'}`}>{item.money > 0 ? '+' : ''}{item.money} Kč</div>}
+                                  </div>
+                              </div>
+                          ))
                       )}
-
-                      <button 
-                        onClick={handlePinChange}
-                        disabled={!newPin || !confirmPin}
-                        className="w-full py-3 bg-brand-dark text-white font-bold rounded-xl shadow-lg disabled:opacity-50"
-                      >
-                          Uložit PIN
-                      </button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* Avatar Editor Modal */}
-      {showAvatarEditor && (
-        <AvatarEditor
-            currentConfig={currentUser.avatarConfig}
-            onSave={handleAvatarSave}
-            onClose={() => setShowAvatarEditor(false)}
-        />
+      {/* Exchange Modal */}
+      {showExchange && currentUser && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-scale-in">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2"><Repeat/> Směnárna</h3>
+                      <button onClick={() => setShowExchange(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-8 px-4">
+                      <div className="text-center"><div className="text-4xl mb-2">⭐</div><div className="font-bold text-gray-600">Body</div></div>
+                      <div className="text-gray-300"><ArrowRightLeft size={32}/></div>
+                      <div className="text-center"><div className="text-4xl mb-2">💰</div><div className="font-bold text-gray-600">Peníze</div></div>
+                  </div>
+
+                  <div className="bg-blue-50 p-4 rounded-xl text-center mb-6">
+                      <p className="text-sm text-blue-800 font-bold mb-1">Kurz: 10 bodů = 1 Kč</p>
+                      <p className="text-xs text-blue-600">Můžeš směnit max {maxExchangeablePoints} bodů</p>
+                  </div>
+
+                  <div className="mb-8">
+                      <div className="flex justify-between text-sm font-bold text-gray-600 mb-2">
+                          <span>0</span>
+                          <span className="text-brand-blue">{exchangePoints} bodů</span>
+                          <span>{maxExchangeablePoints}</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max={maxExchangeablePoints} 
+                        step="10" 
+                        value={exchangePoints} 
+                        onChange={(e) => setExchangePoints(Number(e.target.value))}
+                        className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
+                      />
+                      <div className="mt-4 text-center">
+                          <span className="text-gray-500">Dostaneš:</span>
+                          <span className="block text-3xl font-bold text-brand-green">{exchangePoints / 10} Kč</span>
+                      </div>
+                  </div>
+
+                  <button 
+                      onClick={submitExchange}
+                      disabled={exchangePoints === 0}
+                      className="w-full py-4 bg-brand-dark text-white font-bold rounded-xl shadow-lg hover:bg-slate-800 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                      Proměnit body
+                  </button>
+              </div>
+          </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettings && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-scale-in">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2"><Settings/> Nastavení</h3>
+                      <button onClick={() => setShowSettings(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                  </div>
+
+                  <div className="space-y-4">
+                      <h4 className="font-bold text-gray-700 border-b pb-2">Změnit PIN</h4>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 mb-1">Nový PIN (4 čísla)</label>
+                          <input type="password" maxLength={4} value={newPin} onChange={(e) => setNewPin(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-center tracking-widest font-bold text-gray-900" placeholder="####" />
+                      </div>
+                      <div>
+                          <label className="block text-xs font-bold text-gray-500 mb-1">Potvrdit PIN</label>
+                          <input type="password" maxLength={4} value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-center tracking-widest font-bold text-gray-900" placeholder="####" />
+                      </div>
+                      {settingsMessage && <p className={`text-center text-sm font-bold ${settingsMessage.includes('!') ? 'text-green-500' : 'text-red-500'}`}>{settingsMessage}</p>}
+                      
+                      <button onClick={handlePinChange} className="w-full py-3 bg-brand-blue text-white font-bold rounded-xl shadow-md hover:bg-blue-600">Uložit PIN</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Daily Reward Modal */}
+      {showDailyRewardModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[90] flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-sm rounded-[2rem] p-8 shadow-2xl animate-scale-in text-center relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-b from-yellow-100/50 to-transparent pointer-events-none"></div>
+                  <div className="relative z-10">
+                      <div className="text-6xl mb-4 animate-bounce">🎁</div>
+                      <h2 className="text-2xl font-display font-bold text-brand-dark mb-2">Vítej zpět!</h2>
+                      <p className="text-gray-600 mb-6">Tady je tvá denní odměna za přihlášení.</p>
+                      <div className="text-4xl font-bold text-brand-yellow drop-shadow-sm mb-8">+10 Bodů</div>
+                      <button onClick={() => setShowDailyRewardModal(false)} className="w-full py-3 bg-brand-yellow text-brand-dark font-bold rounded-xl shadow-lg hover:bg-yellow-400 transition-all active:scale-95">Děkuju!</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Delete Goal Confirmation Modal */}
+      {deleteGoalConfirmation.isOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                            <AlertTriangle size={32} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800">Smazat přání?</h3>
+                        <p className="text-gray-500 mt-2 text-sm">Opravdu chceš toto přání smazat?</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setDeleteGoalConfirmation({ isOpen: false, goalId: null })}
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                        >
+                            Ne
+                        </button>
+                        <button 
+                            onClick={confirmDeleteGoal}
+                            className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
+                        >
+                            Ano
+                        </button>
+                    </div>
+                </div>
+            </div>
+      )}
+
+      {/* Delete Task Confirmation Modal */}
+      {deleteTaskConfirmation.isOpen && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                    <div className="flex flex-col items-center text-center mb-6">
+                        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                            <Trash2 size={32} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-800">Smazat úkol?</h3>
+                        <p className="text-gray-500 mt-2 text-sm">Chceš tento úkol odstranit?</p>
+                    </div>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => setDeleteTaskConfirmation({ isOpen: false, taskId: null })}
+                            className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors"
+                        >
+                            Nechat
+                        </button>
+                        <button 
+                            onClick={confirmDeleteTask}
+                            className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors"
+                        >
+                            Smazat
+                        </button>
+                    </div>
+                </div>
+            </div>
+      )}
+
+      {/* Profile Photo Modal */}
+      {showProfilePhotoModal && currentUser && (
+          <ProfilePhotoModal 
+              user={currentUser}
+              onSave={handleProfilePhotoSave}
+              onClose={() => setShowProfilePhotoModal(false)}
+          />
       )}
 
     </div>
   );
 };
-
-// Helper for feedback
-const XCircle = ({ size, className }: { size: number, className?: string }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
-);
 
 export default ChildDashboard;
