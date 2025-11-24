@@ -154,6 +154,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
+      // Family ID persists forever (until logout) -> localStorage
       const storedFamilyId = localStorage.getItem('ukolnicek_family_id');
       if (storedFamilyId) {
           setFamilyId(storedFamilyId);
@@ -162,7 +163,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Restore Current User once Users are loaded
   useEffect(() => {
-      const storedUserId = localStorage.getItem('ukolnicek_user_id');
+      // User ID persists only for the SESSION (until tab close) -> sessionStorage
+      const storedUserId = sessionStorage.getItem('ukolnicek_user_id');
       if (storedUserId && users.length > 0 && !currentUser) {
           const user = users.find(u => u.id === storedUserId);
           if (user) setCurrentUser(user);
@@ -269,20 +271,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const user = users.find(u => u.id === userId);
     if (user) {
         setCurrentUser(user);
-        localStorage.setItem('ukolnicek_user_id', userId);
+        // Use sessionStorage so it clears when window/tab is closed
+        sessionStorage.setItem('ukolnicek_user_id', userId);
     }
   };
 
   const logout = () => {
     setCurrentUser(null);
-    localStorage.removeItem('ukolnicek_user_id');
+    sessionStorage.removeItem('ukolnicek_user_id');
   };
 
   const logoutFamily = () => {
       setCurrentUser(null);
       setFamilyId(null);
       localStorage.removeItem('ukolnicek_family_id');
-      localStorage.removeItem('ukolnicek_user_id');
+      sessionStorage.removeItem('ukolnicek_user_id');
   };
 
   const refreshData = async () => {
