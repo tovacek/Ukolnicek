@@ -51,7 +51,7 @@ interface AppContextType {
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   deleteGoal: (id: string) => Promise<void>;
   checkAndClaimDailyReward: (userId: string) => Promise<boolean>;
-  saveGameResult: (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH') => Promise<{ isNewRecord: boolean, reward: number }>;
+  saveGameResult: (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH') => Promise<{ isNewRecord: boolean, reward: number, pointsEarned: number }>;
   markNotificationRead: (id: string) => void;
 }
 
@@ -677,24 +677,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
   
-  const saveGameResult = async (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH'): Promise<{ isNewRecord: boolean, reward: number }> => {
-      if (!currentUser || !familyId) return { isNewRecord: false, reward: 0 };
+  const saveGameResult = async (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH'): Promise<{ isNewRecord: boolean, reward: number, pointsEarned: number }> => {
+      if (!currentUser || !familyId) return { isNewRecord: false, reward: 0, pointsEarned: 0 };
       
       const currentHigh = category === 'MATH' ? (currentUser.towerHighScoreMath || 0) : (currentUser.towerHighScoreEnglish || 0);
       let isNewRecord = false;
       let rewardMoney = 0;
-
-      // New Logic: 10 CZK only if 0 errors and score > 0
-      if (incorrect === 0 && score > 0) {
-          rewardMoney = 10;
-      }
-
-      // High Score Logic
-      const userUpdates: Partial<User> = {};
-      const dbUpdates: any = {};
+      
+      // Earn 1 App Point for every correct answer
+      const pointsEarned = correct;
 
       if (score > currentHigh) {
           isNewRecord = true;
+      }
+
+      // Money: 10 CZK if it is a NEW RECORD and NO ERRORS
+      if (isNewRecord && incorrect === 0 && score > 0) {
+          rewardMoney = 10;
+      }
+
+      const userUpdates: Partial<User> = {};
+      const dbUpdates: any = {};
+
+      if (isNewRecord) {
           if (category === 'MATH') {
              userUpdates.towerHighScoreMath = score;
              dbUpdates.tower_high_score_math = score;
@@ -709,6 +714,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           const newBalance = (currentUser.balance || 0) + rewardMoney;
           userUpdates.balance = newBalance;
           dbUpdates.balance = newBalance;
+      }
+      
+      // Add points if applicable
+      if (pointsEarned > 0) {
+          const newPoints = (currentUser.points || 0) + pointsEarned;
+          // We can't rely on currentUser.points being perfectly up to date if we just updated it locally in a previous line without state flush, 
+          // but here we are constructing a single update object.
+          // Wait, if rewardMoney > 0, we updated userUpdates.balance. 
+          // We should use the "current" state logic carefully.
+          // The cleanest way is to take the (user.points || 0) + pointsEarned.
+          
+          userUpdates.points = newPoints;
+          dbUpdates.points = newPoints;
       }
 
       // Save Game Result to History
@@ -738,12 +756,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Update User if needed
       if (Object.keys(userUpdates).length > 0) {
-          setCurrentUser({ ...currentUser, ...userUpdates });
+          // Merge with current state to ensure we don't lose other fields
+          const updatedUser = { ...currentUser, ...userUpdates };
+          setCurrentUser(updatedUser);
           setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...userUpdates } : u));
+          
           await supabase.from('users').update(dbUpdates).eq('id', currentUser.id);
       }
 
-      return { isNewRecord, reward: rewardMoney };
+      return { isNewRecord, reward: rewardMoney, pointsEarned };
   };
 
   const markNotificationRead = (id: string) => {

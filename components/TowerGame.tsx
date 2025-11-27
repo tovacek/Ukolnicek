@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { X, Trophy, Clock, Brain, Languages, Check, AlertTriangle } from 'lucide-react';
+import { X, Trophy, Clock, Brain, Languages, Check, AlertTriangle, Star } from 'lucide-react';
 import { generateQuestion, Question, QuestionType } from '../services/gameQuestions';
 import { useApp } from '../context/AppContext';
 
@@ -22,6 +22,10 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
     const [timeLeft, setTimeLeft] = useState(5);
     const [gameOverReason, setGameOverReason] = useState('');
     const [rewardMessage, setRewardMessage] = useState('');
+    const [earnedPointsDisplay, setEarnedPointsDisplay] = useState(0);
+    
+    // Track questions used in this session to prevent repetition
+    const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([]);
 
     useEffect(() => {
         let timer: any;
@@ -46,12 +50,22 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
         setCorrectCount(0);
         setIncorrectCount(0);
         setBlocks([]);
+        setUsedQuestionIds([]); // Reset used questions
         setGameState('PLAYING');
-        nextQuestion(type);
+        nextQuestion(type, []);
     };
 
-    const nextQuestion = (type: QuestionType) => {
-        const q = generateQuestion(type);
+    const nextQuestion = (type: QuestionType, currentUsedIds: string[]) => {
+        let q: Question;
+        let attempts = 0;
+        
+        // Try to find a question that hasn't been used yet
+        do {
+            q = generateQuestion(type);
+            attempts++;
+        } while (currentUsedIds.includes(q.id) && attempts < 20);
+
+        setUsedQuestionIds(prev => [...prev, q.id]);
         setCurrentQuestion(q);
         setTimeLeft(5); 
     };
@@ -64,14 +78,15 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
             setScore(newScore);
             setCorrectCount(prev => prev + 1);
             setBlocks(prev => [...prev, Date.now()]);
-            nextQuestion(category);
+            // Pass the updated used list
+            nextQuestion(category, [...usedQuestionIds, currentQuestion.id]);
         } else {
             if (score > 0) {
                 setScore(prev => prev - 1);
                 setBlocks(prev => prev.slice(0, -1));
             }
             setIncorrectCount(prev => prev + 1);
-            nextQuestion(category);
+            nextQuestion(category, [...usedQuestionIds, currentQuestion.id]);
         }
     };
 
@@ -79,11 +94,13 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
         setGameState('GAMEOVER');
         setGameOverReason(reason);
         
-        const { isNewRecord, reward } = await saveGameResult(score, correctCount, incorrectCount, category);
+        const { isNewRecord, reward, pointsEarned } = await saveGameResult(score, correctCount, incorrectCount, category);
+        setEarnedPointsDisplay(pointsEarned);
         
         let msg = "";
-        if (reward > 0) msg = `Perfektní hra! Získáváš +${reward} Kč!`;
+        if (reward > 0) msg = `Perfektní hra! Rekord bez chyb! +${reward} Kč!`;
         else if (isNewRecord) msg = "Nový rekord!";
+        else if (pointsEarned > 0) msg = `Získáno +${pointsEarned} bodů do aplikace!`;
         
         setRewardMessage(msg);
     };
@@ -98,7 +115,7 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
                         <div>
                             <h2 className="text-4xl font-display font-bold text-brand-dark mb-2">Stavitel Věže</h2>
                             <p className="text-gray-500">Odpovídej správně a postav nejvyšší věž!</p>
-                            <p className="text-xs text-green-600 font-bold mt-2 bg-green-50 inline-block px-3 py-1 rounded-full">Bonus: 10 Kč za hru bez chyb!</p>
+                            <p className="text-xs text-green-600 font-bold mt-2 bg-green-50 inline-block px-3 py-1 rounded-full">Bonus: 10 Kč za nový rekord bez chyb!</p>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4 w-full max-w-sm">
@@ -180,6 +197,14 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
                         <h2 className="text-3xl font-bold text-slate-800 mb-2">Hra skončila</h2>
                         <p className="text-red-500 font-bold text-lg mb-6">{gameOverReason}</p>
                         
+                        <div className="bg-brand-yellow/10 p-4 rounded-xl border border-brand-yellow/30 mb-6 w-full max-w-xs">
+                             <div className="text-sm font-bold text-brand-dark uppercase mb-1">Získané body</div>
+                             <div className="text-3xl font-bold text-brand-dark flex items-center justify-center gap-2">
+                                <Star fill="currentColor" className="text-brand-yellow" size={28} />
+                                +{earnedPointsDisplay}
+                             </div>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4 w-full max-w-xs mb-6">
                             <div className="bg-green-50 p-3 rounded-xl border border-green-100 text-green-700">
                                 <div className="text-xs font-bold uppercase mb-1 flex items-center justify-center gap-1"><Check size={12}/> Správně</div>

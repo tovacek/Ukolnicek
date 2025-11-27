@@ -42,9 +42,12 @@ const generateMathQuestion = (): Question => {
         if (wrong >= 0 && wrong !== result) options.add(wrong.toString());
     }
 
+    const text = `${a} ${operator} ${b} = ?`;
+    
+    // Use text as ID to prevent duplicate questions (e.g. 5+5 appearing twice)
     return {
-        id: Math.random().toString(),
-        text: `${a} ${operator} ${b} = ?`,
+        id: text.replace(/\s/g, ''),
+        text: text,
         options: Array.from(options).sort(() => Math.random() - 0.5),
         correctAnswer,
         type: 'MATH'
@@ -52,10 +55,37 @@ const generateMathQuestion = (): Question => {
 };
 
 const englishWords = [
-    { cs: 'Pes', en: 'Dog' }, { cs: 'Kočka', en: 'Cat' }, { cs: 'Jablko', en: 'Apple' },
-    { cs: 'Auto', en: 'Car' }, { cs: 'Dům', en: 'House' }, { cs: 'Slunce', en: 'Sun' },
-    { cs: 'Červená', en: 'Red' }, { cs: 'Modrá', en: 'Blue' }, { cs: 'Kniha', en: 'Book' },
-    { cs: 'Voda', en: 'Water' }
+    // Animals
+    { cs: 'Pes', en: 'Dog' }, { cs: 'Kočka', en: 'Cat' }, { cs: 'Prase', en: 'Pig' },
+    { cs: 'Kůň', en: 'Horse' }, { cs: 'Kráva', en: 'Cow' }, { cs: 'Ovce', en: 'Sheep' },
+    { cs: 'Lev', en: 'Lion' }, { cs: 'Slon', en: 'Elephant' }, { cs: 'Opice', en: 'Monkey' },
+    { cs: 'Ryba', en: 'Fish' }, { cs: 'Pták', en: 'Bird' }, { cs: 'Myš', en: 'Mouse' },
+    
+    // Food
+    { cs: 'Jablko', en: 'Apple' }, { cs: 'Banán', en: 'Banana' }, { cs: 'Pomeranč', en: 'Orange' },
+    { cs: 'Chléb', en: 'Bread' }, { cs: 'Voda', en: 'Water' }, { cs: 'Mléko', en: 'Milk' },
+    { cs: 'Vejce', en: 'Egg' }, { cs: 'Sýr', en: 'Cheese' }, { cs: 'Dort', en: 'Cake' },
+    { cs: 'Zmrzlina', en: 'Ice cream' }, { cs: 'Maso', en: 'Meat' }, { cs: 'Jahoda', en: 'Strawberry' },
+
+    // Colors
+    { cs: 'Červená', en: 'Red' }, { cs: 'Modrá', en: 'Blue' }, { cs: 'Zelená', en: 'Green' },
+    { cs: 'Žlutá', en: 'Yellow' }, { cs: 'Černá', en: 'Black' }, { cs: 'Bílá', en: 'White' },
+    { cs: 'Růžová', en: 'Pink' }, { cs: 'Fialová', en: 'Purple' }, { cs: 'Oranžová', en: 'Orange' },
+    
+    // Home & Objects
+    { cs: 'Auto', en: 'Car' }, { cs: 'Dům', en: 'House' }, { cs: 'Kniha', en: 'Book' },
+    { cs: 'Stůl', en: 'Table' }, { cs: 'Židle', en: 'Chair' }, { cs: 'Postel', en: 'Bed' },
+    { cs: 'Tužka', en: 'Pencil' }, { cs: 'Míč', en: 'Ball' }, { cs: 'Hračka', en: 'Toy' },
+    { cs: 'Boty', en: 'Shoes' }, { cs: 'Tričko', en: 'T-shirt' }, { cs: 'Hodiny', en: 'Clock' },
+
+    // Nature
+    { cs: 'Slunce', en: 'Sun' }, { cs: 'Měsíc', en: 'Moon' }, { cs: 'Hvězda', en: 'Star' },
+    { cs: 'Strom', en: 'Tree' }, { cs: 'Květina', en: 'Flower' }, { cs: 'Déšť', en: 'Rain' },
+    { cs: 'Sníh', en: 'Snow' }, { cs: 'Řeka', en: 'River' }, { cs: 'Moře', en: 'Sea' },
+
+    // Body
+    { cs: 'Hlava', en: 'Head' }, { cs: 'Ruka', en: 'Hand' }, { cs: 'Noha', en: 'Leg' },
+    { cs: 'Oko', en: 'Eye' }, { cs: 'Ucho', en: 'Ear' }, { cs: 'Nos', en: 'Nose' }
 ];
 
 const generateEnglishQuestion = (): Question => {
@@ -71,7 +101,7 @@ const generateEnglishQuestion = (): Question => {
     }
 
     return {
-        id: Math.random().toString(),
+        id: `EN_${word.en}`, // Use word as ID to prevent duplicates
         text: `Jak se řekne anglicky "${word.cs}"?`,
         options: Array.from(options).sort(() => Math.random() - 0.5),
         correctAnswer,
