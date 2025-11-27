@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, GameResult } from '../types';
+import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, GameResult, Pet, PetType, PetStage } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
@@ -21,6 +21,7 @@ interface AppContextType {
   goals: Goal[];
   notifications: AppNotification[];
   gameResults: GameResult[];
+  pets: Pet[];
   
   // Auth Methods
   loginFamily: (email: string, password: string) => Promise<{success: boolean, error?: string}>;
@@ -53,6 +54,11 @@ interface AppContextType {
   checkAndClaimDailyReward: (userId: string) => Promise<boolean>;
   saveGameResult: (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH') => Promise<{ isNewRecord: boolean, reward: number, pointsEarned: number }>;
   markNotificationRead: (id: string) => void;
+  
+  // Pet Methods
+  adoptPet: (type: PetType, name: string) => Promise<void>;
+  feedPet: (petId: string) => Promise<{success: boolean, message: string}>;
+  playWithPet: (petId: string) => Promise<{success: boolean, message: string}>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -160,6 +166,19 @@ const mapGameResultFromDb = (r: any): GameResult => ({
   date: r.created_at
 });
 
+const mapPetFromDb = (p: any): Pet => ({
+  id: p.id,
+  familyId: p.family_id,
+  childId: p.child_id,
+  name: p.name,
+  type: p.type as PetType,
+  stage: p.stage as PetStage,
+  health: p.health,
+  happiness: p.happiness,
+  experience: p.experience,
+  lastInteraction: p.last_interaction
+});
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Auth State
   const [familyId, setFamilyId] = useState<string | null>(null);
@@ -172,6 +191,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [goals, setGoals] = useState<Goal[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [gameResults, setGameResults] = useState<GameResult[]>([]);
+  const [pets, setPets] = useState<Pet[]>([]);
 
   // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
@@ -200,6 +220,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setPayoutHistory([]);
         setGoals([]);
         setGameResults([]);
+        setPets([]);
         return;
     }
 
@@ -225,6 +246,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const { data: gamesData } = await supabase.from('game_results').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
       if (gamesData) setGameResults(gamesData.map(mapGameResultFromDb));
+
+      const { data: petsData } = await supabase.from('pets').select('*').eq('family_id', familyId);
+      if (petsData) {
+          const mappedPets = petsData.map(mapPetFromDb);
+          
+          // Check for stats decay
+          const updatedPets = await Promise.all(mappedPets.map(async (pet) => {
+              const now = new Date();
+              const lastInteraction = new Date(pet.lastInteraction);
+              const diffHours = (now.getTime() - lastInteraction.getTime()) / (1000 * 3600);
+              
+              // Decrease stats if more than 1 hour passed
+              if (diffHours >= 1) {
+                  const decay = Math.floor(diffHours) * 5; // -5 stats per hour
+                  const newHealth = Math.max(0, pet.health - decay);
+                  const newHappiness = Math.max(0, pet.happiness - decay);
+                  
+                  if (newHealth !== pet.health || newHappiness !== pet.happiness) {
+                      await supabase.from('pets').update({
+                          health: newHealth,
+                          happiness: newHappiness
+                      }).eq('id', pet.id);
+                      return { ...pet, health: newHealth, happiness: newHappiness };
+                  }
+              }
+              return pet;
+          }));
+          
+          setPets(updatedPets);
+      }
 
     } catch (error) {
       console.error("Failed to fetch data", error);
@@ -684,14 +735,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let isNewRecord = false;
       let rewardMoney = 0;
       
-      // Earn 1 App Point for every correct answer
       const pointsEarned = correct;
 
       if (score > currentHigh) {
           isNewRecord = true;
       }
 
-      // Money: 10 CZK if it is a NEW RECORD and NO ERRORS
       if (isNewRecord && incorrect === 0 && score > 0) {
           rewardMoney = 10;
       }
@@ -709,27 +758,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           }
       }
       
-      // Add money if applicable
       if (rewardMoney > 0) {
           const newBalance = (currentUser.balance || 0) + rewardMoney;
           userUpdates.balance = newBalance;
           dbUpdates.balance = newBalance;
       }
       
-      // Add points if applicable
       if (pointsEarned > 0) {
           const newPoints = (currentUser.points || 0) + pointsEarned;
-          // We can't rely on currentUser.points being perfectly up to date if we just updated it locally in a previous line without state flush, 
-          // but here we are constructing a single update object.
-          // Wait, if rewardMoney > 0, we updated userUpdates.balance. 
-          // We should use the "current" state logic carefully.
-          // The cleanest way is to take the (user.points || 0) + pointsEarned.
-          
           userUpdates.points = newPoints;
           dbUpdates.points = newPoints;
       }
 
-      // Save Game Result to History
       const result: GameResult = {
           id: Math.random().toString(36).substr(2, 9),
           familyId,
@@ -754,9 +794,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           reward_amount: result.rewardAmount
       });
 
-      // Update User if needed
       if (Object.keys(userUpdates).length > 0) {
-          // Merge with current state to ensure we don't lose other fields
           const updatedUser = { ...currentUser, ...userUpdates };
           setCurrentUser(updatedUser);
           setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...userUpdates } : u));
@@ -770,6 +808,120 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const markNotificationRead = (id: string) => {
       // Placeholder
   };
+  
+  // --- PET LOGIC ---
+
+  const adoptPet = async (type: PetType, name: string) => {
+      if (!currentUser || !familyId) return;
+      
+      const newPet: Pet = {
+          id: Math.random().toString(36).substr(2, 9),
+          familyId,
+          childId: currentUser.id,
+          name,
+          type,
+          stage: PetStage.EGG,
+          health: 100,
+          happiness: 100,
+          experience: 0,
+          lastInteraction: new Date().toISOString()
+      };
+      
+      setPets(prev => [...prev, newPet]);
+      await supabase.from('pets').insert({
+          id: newPet.id,
+          family_id: newPet.familyId,
+          child_id: newPet.childId,
+          name: newPet.name,
+          type: newPet.type,
+          stage: newPet.stage,
+          health: newPet.health,
+          happiness: newPet.happiness,
+          experience: newPet.experience,
+          last_interaction: newPet.lastInteraction
+      });
+  };
+
+  const feedPet = async (petId: string): Promise<{success: boolean, message: string}> => {
+      if (!currentUser) return { success: false, message: 'Not logged in' };
+      const pet = pets.find(p => p.id === petId);
+      if (!pet) return { success: false, message: 'Pet not found' };
+
+      const cost = 10;
+      if ((currentUser.points || 0) < cost) {
+          return { success: false, message: 'Nedostatek bodů (Cena: 10)' };
+      }
+
+      const newHealth = Math.min(100, pet.health + 20);
+      const newXP = pet.experience + 5;
+      const now = new Date().toISOString();
+
+      // Deduct points
+      const newPoints = (currentUser.points || 0) - cost;
+      setCurrentUser(prev => prev ? { ...prev, points: newPoints } : null);
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, points: newPoints } : u));
+      await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
+
+      // Update Pet
+      await updatePetStats(petId, { health: newHealth, experience: newXP, lastInteraction: now });
+      
+      // Check evolution
+      if (newXP >= 100 && pet.stage < PetStage.ADULT) {
+          evolvePet(petId, pet.stage + 1);
+          return { success: true, message: 'Mňam! A navíc se vyvíjím!' };
+      }
+
+      return { success: true, message: 'Mňam! To bylo dobré.' };
+  };
+
+  const playWithPet = async (petId: string): Promise<{success: boolean, message: string}> => {
+      if (!currentUser) return { success: false, message: 'Not logged in' };
+      const pet = pets.find(p => p.id === petId);
+      if (!pet) return { success: false, message: 'Pet not found' };
+
+      const cost = 5;
+       if ((currentUser.points || 0) < cost) {
+          return { success: false, message: 'Nedostatek bodů (Cena: 5)' };
+      }
+
+      const newHappiness = Math.min(100, pet.happiness + 20);
+      const newXP = pet.experience + 10;
+      const now = new Date().toISOString();
+
+      // Deduct points
+      const newPoints = (currentUser.points || 0) - cost;
+      setCurrentUser(prev => prev ? { ...prev, points: newPoints } : null);
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, points: newPoints } : u));
+      await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
+
+      // Update Pet
+      await updatePetStats(petId, { happiness: newHappiness, experience: newXP, lastInteraction: now });
+
+      // Check evolution
+      if (newXP >= 100 && pet.stage < PetStage.ADULT) {
+          evolvePet(petId, pet.stage + 1);
+          return { success: true, message: 'Jupí! A navíc se vyvíjím!' };
+      }
+
+      return { success: true, message: 'To byla zábava!' };
+  };
+
+  const updatePetStats = async (petId: string, updates: Partial<Pet>) => {
+      setPets(prev => prev.map(p => p.id === petId ? { ...p, ...updates } : p));
+      
+      const dbUpdates: any = {};
+      if (updates.health !== undefined) dbUpdates.health = updates.health;
+      if (updates.happiness !== undefined) dbUpdates.happiness = updates.happiness;
+      if (updates.experience !== undefined) dbUpdates.experience = updates.experience;
+      if (updates.lastInteraction !== undefined) dbUpdates.last_interaction = updates.lastInteraction;
+      if (updates.stage !== undefined) dbUpdates.stage = updates.stage;
+
+      await supabase.from('pets').update(dbUpdates).eq('id', petId);
+  };
+
+  const evolvePet = async (petId: string, newStage: PetStage) => {
+      await updatePetStats(petId, { stage: newStage, experience: 0 });
+  };
 
   return (
     <AppContext.Provider value={{
@@ -781,6 +933,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       goals,
       notifications,
       gameResults,
+      pets,
       loginFamily,
       registerFamily,
       selectProfile,
@@ -808,7 +961,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deleteGoal,
       checkAndClaimDailyReward,
       saveGameResult,
-      markNotificationRead
+      markNotificationRead,
+      adoptPet,
+      feedPet,
+      playWithPet
     }}>
       {children}
     </AppContext.Provider>

@@ -104,3 +104,29 @@ export interface AppNotification {
   isRead: boolean;
   createdAt: string;
 }
+
+// --- PETS ---
+export enum PetType {
+  DRAGON = 'DRAGON',
+  UNICORN = 'UNICORN',
+  DINO = 'DINO'
+}
+
+export enum PetStage {
+  EGG = 1,
+  BABY = 2,
+  ADULT = 3
+}
+
+export interface Pet {
+  id: string;
+  familyId: string;
+  childId: string;
+  name: string;
+  type: PetType;
+  stage: PetStage;
+  health: number; // 0-100
+  happiness: number; // 0-100
+  experience: number; // 0-100 (resets on evolution)
+  lastInteraction: string; // ISO timestamp
+}
