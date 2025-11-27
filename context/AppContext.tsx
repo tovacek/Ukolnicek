@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification } from '../types';
+import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, GameResult } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
@@ -20,6 +20,7 @@ interface AppContextType {
   payoutHistory: PayoutRecord[];
   goals: Goal[];
   notifications: AppNotification[];
+  gameResults: GameResult[];
   
   // Auth Methods
   loginFamily: (email: string, password: string) => Promise<{success: boolean, error?: string}>;
@@ -50,6 +51,7 @@ interface AppContextType {
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   deleteGoal: (id: string) => Promise<void>;
   checkAndClaimDailyReward: (userId: string) => Promise<boolean>;
+  saveGameResult: (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH') => Promise<{ isNewRecord: boolean, reward: number }>;
   markNotificationRead: (id: string) => void;
 }
 
@@ -70,7 +72,9 @@ const mapUserFromDb = (u: any): User => ({
   familyName: u.family_name,
   allowanceSettings: u.allowance_settings,
   lastLoginRewardDate: u.last_login_reward_date,
-  createdAt: u.created_at
+  createdAt: u.created_at,
+  towerHighScoreMath: u.tower_high_score_math || 0,
+  towerHighScoreEnglish: u.tower_high_score_english || 0
 });
 
 const mapUserToDb = (u: User) => ({
@@ -86,7 +90,9 @@ const mapUserToDb = (u: User) => ({
   pin: u.pin,
   family_name: u.familyName,
   allowance_settings: u.allowanceSettings,
-  last_login_reward_date: u.lastLoginRewardDate
+  last_login_reward_date: u.lastLoginRewardDate,
+  tower_high_score_math: u.towerHighScoreMath,
+  tower_high_score_english: u.towerHighScoreEnglish
 });
 
 const mapTaskFromDb = (t: any): Task => ({
@@ -142,6 +148,18 @@ const mapGoalFromDb = (g: any): Goal => ({
   imageUrl: g.image_url
 });
 
+const mapGameResultFromDb = (r: any): GameResult => ({
+  id: r.id,
+  familyId: r.family_id,
+  childId: r.child_id,
+  category: r.category,
+  score: r.score,
+  correctCount: r.correct_count,
+  incorrectCount: r.incorrect_count,
+  rewardAmount: r.reward_amount,
+  date: r.created_at
+});
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Auth State
   const [familyId, setFamilyId] = useState<string | null>(null);
@@ -153,6 +171,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [payoutHistory, setPayoutHistory] = useState<PayoutRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [gameResults, setGameResults] = useState<GameResult[]>([]);
 
   // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
@@ -180,6 +199,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setTasks([]);
         setPayoutHistory([]);
         setGoals([]);
+        setGameResults([]);
         return;
     }
 
@@ -202,6 +222,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const { data: goalsData } = await supabase.from('goals').select('*').eq('family_id', familyId);
       if (goalsData) setGoals(goalsData.map(mapGoalFromDb));
+
+      const { data: gamesData } = await supabase.from('game_results').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
+      if (gamesData) setGameResults(gamesData.map(mapGameResultFromDb));
 
     } catch (error) {
       console.error("Failed to fetch data", error);
@@ -654,6 +677,75 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
   
+  const saveGameResult = async (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH'): Promise<{ isNewRecord: boolean, reward: number }> => {
+      if (!currentUser || !familyId) return { isNewRecord: false, reward: 0 };
+      
+      const currentHigh = category === 'MATH' ? (currentUser.towerHighScoreMath || 0) : (currentUser.towerHighScoreEnglish || 0);
+      let isNewRecord = false;
+      let rewardMoney = 0;
+
+      // New Logic: 10 CZK only if 0 errors and score > 0
+      if (incorrect === 0 && score > 0) {
+          rewardMoney = 10;
+      }
+
+      // High Score Logic
+      const userUpdates: Partial<User> = {};
+      const dbUpdates: any = {};
+
+      if (score > currentHigh) {
+          isNewRecord = true;
+          if (category === 'MATH') {
+             userUpdates.towerHighScoreMath = score;
+             dbUpdates.tower_high_score_math = score;
+          } else {
+             userUpdates.towerHighScoreEnglish = score;
+             dbUpdates.tower_high_score_english = score;
+          }
+      }
+      
+      // Add money if applicable
+      if (rewardMoney > 0) {
+          const newBalance = (currentUser.balance || 0) + rewardMoney;
+          userUpdates.balance = newBalance;
+          dbUpdates.balance = newBalance;
+      }
+
+      // Save Game Result to History
+      const result: GameResult = {
+          id: Math.random().toString(36).substr(2, 9),
+          familyId,
+          childId: currentUser.id,
+          category,
+          score,
+          correctCount: correct,
+          incorrectCount: incorrect,
+          rewardAmount: rewardMoney,
+          date: new Date().toISOString()
+      };
+      setGameResults(prev => [result, ...prev]);
+      
+      await supabase.from('game_results').insert({
+          id: result.id,
+          family_id: result.familyId,
+          child_id: result.childId,
+          category: result.category,
+          score: result.score,
+          correct_count: result.correctCount,
+          incorrect_count: result.incorrectCount,
+          reward_amount: result.rewardAmount
+      });
+
+      // Update User if needed
+      if (Object.keys(userUpdates).length > 0) {
+          setCurrentUser({ ...currentUser, ...userUpdates });
+          setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...userUpdates } : u));
+          await supabase.from('users').update(dbUpdates).eq('id', currentUser.id);
+      }
+
+      return { isNewRecord, reward: rewardMoney };
+  };
+
   const markNotificationRead = (id: string) => {
       // Placeholder
   };
@@ -667,6 +759,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       payoutHistory,
       goals,
       notifications,
+      gameResults,
       loginFamily,
       registerFamily,
       selectProfile,
@@ -693,6 +786,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateGoal,
       deleteGoal,
       checkAndClaimDailyReward,
+      saveGameResult,
       markNotificationRead
     }}>
       {children}

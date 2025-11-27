@@ -2,11 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { TaskStatus, Task, UserRole, Goal } from '../types';
-import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle } from 'lucide-react';
+import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2 } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 import AvatarDisplay from './AvatarDisplay';
 import ImageUploader from './ImageUploader';
 import ProfilePhotoModal from './ProfilePhotoModal';
+import TowerGame from './TowerGame';
 
 const ChildDashboard: React.FC = () => {
   const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, updateChild, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward } = useApp();
@@ -48,6 +49,9 @@ const ChildDashboard: React.FC = () => {
 
   // Profile Photo Modal
   const [showProfilePhotoModal, setShowProfilePhotoModal] = useState(false);
+
+  // Game Modal State
+  const [showGame, setShowGame] = useState(false);
 
   // Delete Confirmation States
   const [deleteGoalConfirmation, setDeleteGoalConfirmation] = useState<{isOpen: boolean, goalId: string | null}>({ isOpen: false, goalId: null });
@@ -409,6 +413,23 @@ const ChildDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Game Card */}
+      <div className="px-4 mb-6 animate-fade-in">
+          <button 
+              onClick={() => setShowGame(true)}
+              className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl p-5 text-white shadow-lg hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden flex items-center justify-between"
+          >
+              <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 hover:opacity-100 transition-opacity"></div>
+              <div className="relative z-10">
+                  <h3 className="text-xl font-bold font-display flex items-center gap-2 mb-1"><Gamepad2 /> Hra: Stavitel</h3>
+                  <p className="text-violet-200 text-xs">Postav věž a vyhraj 10 Kč!</p>
+              </div>
+              <div className="bg-white/20 p-2 rounded-full relative z-10 backdrop-blur-sm">
+                  <Trophy className="text-yellow-300" size={24} />
+              </div>
+          </button>
+      </div>
+
       {/* Goals */}
       <div className="px-4 mb-6 animate-fade-in">
          <div className="flex justify-between items-center mb-3">
@@ -496,8 +517,6 @@ const ChildDashboard: React.FC = () => {
                     ) : (
                         todoTasks.map(task => {
                             const isOverdue = task.date < todayStr;
-                            // Future tasks are no longer locked/grayscale based on prompt "dítě úkol může stále splnit".
-                            // But overdue tasks should look different.
                             const isFuture = task.date > todayStr;
 
                             return (
@@ -623,6 +642,11 @@ const ChildDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* Game Modal */}
+      {showGame && (
+          <TowerGame onClose={() => setShowGame(false)} />
+      )}
+
       {/* Other modals remain the same */}
       {/* Custom Task Modal */}
       {showCustomTaskModal && (
@@ -659,7 +683,6 @@ const ChildDashboard: React.FC = () => {
           </div>
       )}
       
-      {/* ... keeping other modals (Goal, History, Exchange, Settings, DailyReward, DeleteConfirmations, ProfilePhoto) same as previous ... */}
       {/* Goal Modal */}
       {showGoalModal && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">

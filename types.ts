@@ -26,6 +26,8 @@ export interface User {
   allowanceSettings?: AllowanceSettings;
   lastLoginRewardDate?: string; // YYYY-MM-DD of last daily login reward
   createdAt?: string; // ISO Date string of account creation
+  towerHighScoreMath?: number;
+  towerHighScoreEnglish?: number;
 }
 
 export enum TaskStatus {
@@ -81,12 +83,24 @@ export interface Goal {
   imageUrl?: string;
 }
 
+export interface GameResult {
+  id: string;
+  familyId: string;
+  childId: string;
+  category: string;
+  score: number;
+  correctCount: number;
+  incorrectCount: number;
+  rewardAmount: number;
+  date: string;
+}
+
 export interface AppNotification {
   id: string;
   familyId: string;
   recipientId: string;
   message: string;
-  type: 'NEW_TASK' | 'APPROVAL_NEEDED' | 'MONEY_EARNED';
+  type: 'NEW_TASK' | 'APPROVAL_NEEDED' | 'MONEY_EARNED' | 'GAME_HIGHSCORE';
   isRead: boolean;
   createdAt: string;
 }
