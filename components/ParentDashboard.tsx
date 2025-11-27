@@ -40,6 +40,7 @@ import {
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import AvatarDisplay from './AvatarDisplay';
 import ImageUploader from './ImageUploader';
+import ScheduleModal from './ScheduleModal';
 
 const ALL_CHILDREN_ID = 'ALL';
 
@@ -88,10 +89,12 @@ const ParentDashboard: React.FC = () => {
   // Child Management State
   const [isAddingChild, setIsAddingChild] = useState(false);
   const [newChildName, setNewChildName] = useState('');
+  const [newChildBirthYear, setNewChildBirthYear] = useState<string>('');
   const [editingChildId, setEditingChildId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
   const [editChildPin, setEditChildPin] = useState('');
+  const [editChildBirthYear, setEditChildBirthYear] = useState<string>('');
 
   // Settings State - Family
   const [familyName, setFamilyName] = useState('');
@@ -134,6 +137,10 @@ const ParentDashboard: React.FC = () => {
   const [allowanceDay, setAllowanceDay] = useState(1);
   const [allowanceThreshold, setAllowanceThreshold] = useState(100);
   const [allowanceEnabled, setAllowanceEnabled] = useState(true);
+
+  // Schedule Modal State
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduleChildId, setScheduleChildId] = useState<string | null>(null);
 
   // Delete Confirmation States
   const [deleteTaskConfirmation, setDeleteTaskConfirmation] = useState<{isOpen: boolean, taskId: string | null}>({ isOpen: false, taskId: null });
@@ -319,8 +326,9 @@ const ParentDashboard: React.FC = () => {
   const handleAddChild = (e: React.FormEvent) => {
     e.preventDefault();
     if (newChildName.trim()) {
-      addChild(newChildName);
+      addChild(newChildName, newChildBirthYear ? parseInt(newChildBirthYear) : undefined);
       setNewChildName('');
+      setNewChildBirthYear('');
       setIsAddingChild(false);
     }
   };
@@ -330,11 +338,12 @@ const ParentDashboard: React.FC = () => {
     setEditName(child.name);
     setEditAvatarUrl(child.avatarUrl || '');
     setEditChildPin(child.pin || '');
+    setEditChildBirthYear(child.birthYear ? child.birthYear.toString() : '');
   };
 
   const saveEdit = () => {
     if (editingChildId && editName.trim()) {
-      updateChild(editingChildId, editName, editAvatarUrl, editChildPin || undefined);
+      updateChild(editingChildId, editName, editAvatarUrl, editChildPin || undefined, editChildBirthYear ? parseInt(editChildBirthYear) : undefined);
       setEditingChildId(null);
     }
   };
@@ -419,6 +428,11 @@ const ParentDashboard: React.FC = () => {
       }
   };
 
+  const openScheduleModal = (child: User) => {
+      setScheduleChildId(child.id);
+      setShowScheduleModal(true);
+  };
+
   if (!currentUser) return null;
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -490,6 +504,7 @@ const ParentDashboard: React.FC = () => {
                                       {editingChildId === child.id ? (
                                           <div className="flex flex-col gap-2 w-full">
                                               <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Jméno" className="border border-indigo-300 rounded px-2 py-1 text-slate-800 font-bold w-full focus:outline-none focus:ring-2 focus:ring-indigo-500"/>
+                                              <input type="number" value={editChildBirthYear} onChange={(e) => setEditChildBirthYear(e.target.value)} placeholder="Rok narození" className="border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 w-full focus:outline-none"/>
                                               <div className="text-xs"><ImageUploader onImageSelected={setEditAvatarUrl} initialImage={editAvatarUrl} label="Změnit foto"/></div>
                                                <input type="text" value={editChildPin} onChange={(e) => setEditChildPin(e.target.value)} placeholder="PIN (volitelné)" className="border border-slate-300 rounded px-2 py-1 text-xs text-slate-800 w-full focus:outline-none mt-2"/>
                                               <div className="flex gap-2 mt-1"><button onClick={saveEdit} className="text-green-600 hover:bg-green-50 p-1 rounded flex items-center gap-1 text-xs font-bold"><Save size={16}/> Uložit</button><button onClick={() => setEditingChildId(null)} className="text-red-500 hover:bg-red-50 p-1 rounded flex items-center gap-1 text-xs font-bold"><XCircle size={16}/> Zrušit</button></div>
@@ -497,12 +512,16 @@ const ParentDashboard: React.FC = () => {
                                       ) : (
                                           <div>
                                             <h4 className="text-xl font-bold text-slate-800">{child.name}</h4>
+                                            <p className="text-xs text-slate-400 mb-1">{child.birthYear ? `Narozen: ${child.birthYear}` : 'Věk nenastaven'}</p>
                                             <div className="flex gap-2 mt-1 text-xs text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><button onClick={() => startEdit(child)} className="hover:text-indigo-600 flex items-center gap-1"><Pencil size={12}/> Upravit</button><button onClick={() => requestDeleteChild(child.id)} className="hover:text-red-600 flex items-center gap-1"><Trash2 size={12}/> Smazat</button></div>
                                           </div>
                                       )}
                                   </div>
                               </div>
-                              <button onClick={() => openAllowanceSettings(child)} className="text-slate-400 hover:text-pink-500 transition-colors"><PiggyBank size={20} /></button>
+                              <div className="flex flex-col gap-1">
+                                <button onClick={() => openAllowanceSettings(child)} className="text-slate-400 hover:text-pink-500 transition-colors" title="Kapesné"><PiggyBank size={20} /></button>
+                                <button onClick={() => openScheduleModal(child)} className="text-slate-400 hover:text-teal-500 transition-colors" title="Kroužky"><Calendar size={20} /></button>
+                              </div>
                           </div>
                           <div className="grid grid-cols-2 gap-4 mb-6"><div className="bg-indigo-50 p-3 rounded-lg text-center"><div className="text-xs text-indigo-400 font-semibold uppercase">Body</div><div className="text-2xl font-bold text-indigo-700">{child.points}</div></div><div className="bg-emerald-50 p-3 rounded-lg text-center"><div className="text-xs text-emerald-600 font-semibold uppercase">Kasička</div><div className="text-2xl font-bold text-emerald-700">{child.balance} Kč</div></div></div>
                         </div>
@@ -510,7 +529,7 @@ const ParentDashboard: React.FC = () => {
                     </div>
                 ))}
                 <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-6 min-h-[300px] hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer">
-                    {isAddingChild ? (<form onSubmit={handleAddChild} className="w-full flex flex-col items-center gap-4"><h4 className="font-bold text-slate-700">Nové dítě</h4><input type="text" placeholder="Jméno" value={newChildName} onChange={e => setNewChildName(e.target.value)} className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" autoFocus /><div className="flex gap-2 w-full"><button type="button" onClick={() => setIsAddingChild(false)} className="flex-1 py-2 bg-gray-200 rounded-lg text-gray-600 font-medium">Zrušit</button><button type="submit" className="flex-1 py-2 bg-indigo-600 rounded-lg text-white font-bold">Přidat</button></div></form>) : (<button onClick={() => setIsAddingChild(true)} className="flex flex-col items-center gap-3 text-slate-400 hover:text-indigo-600"><div className="p-4 bg-white rounded-full shadow-sm"><Plus size={32}/></div><span className="font-medium">Přidat dítě</span></button>)}
+                    {isAddingChild ? (<form onSubmit={handleAddChild} className="w-full flex flex-col items-center gap-4"><h4 className="font-bold text-slate-700">Nové dítě</h4><input type="text" placeholder="Jméno" value={newChildName} onChange={e => setNewChildName(e.target.value)} className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" autoFocus /><input type="number" placeholder="Rok narození (např. 2015)" value={newChildBirthYear} onChange={e => setNewChildBirthYear(e.target.value)} className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" /><div className="flex gap-2 w-full"><button type="button" onClick={() => setIsAddingChild(false)} className="flex-1 py-2 bg-gray-200 rounded-lg text-gray-600 font-medium">Zrušit</button><button type="submit" className="flex-1 py-2 bg-indigo-600 rounded-lg text-white font-bold">Přidat</button></div></form>) : (<button onClick={() => setIsAddingChild(true)} className="flex flex-col items-center gap-3 text-slate-400 hover:text-indigo-600"><div className="p-4 bg-white rounded-full shadow-sm"><Plus size={32}/></div><span className="font-medium">Přidat dítě</span></button>)}
                 </div>
             </div>
             
@@ -722,6 +741,10 @@ const ParentDashboard: React.FC = () => {
                     <button onClick={saveAllowanceSettings} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all">Uložit nastavení</button>
                 </div>
             </div>
+        )}
+
+        {showScheduleModal && scheduleChildId && (
+            <ScheduleModal childId={scheduleChildId} onClose={() => setShowScheduleModal(false)} />
         )}
 
         {deleteTaskConfirmation.isOpen && (

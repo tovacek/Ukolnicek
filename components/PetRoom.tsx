@@ -36,6 +36,11 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         DINO: `${BASE_URL}/Animals/T-Rex.png`
     };
 
+    const ACCESSORIES = {
+        CROWN: `${BASE_URL}/Objects/Crown.png`,
+        WAND: `${BASE_URL}/Activities/Magic Wand.png` // For Mythic effect
+    };
+
     // Items based on Level (Low = Lvl 1-2, Mid = Lvl 3-5, High = Lvl 6+)
     const INTERACTION_ASSETS = {
         FOOD: {
@@ -84,7 +89,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         triggerAnimation('eating');
         
         // 2. Trigger Floating Item Effect
-        const level = Math.floor(myPet.experience / 100) + 1;
+        const level = myPet.stage; // Use stage as level
         const itemSrc = getAssetForLevel('FOOD', level);
         setFloatingItem({ src: itemSrc, type: 'food' });
         setTimeout(() => setFloatingItem(null), 1000); // Clear after animation
@@ -102,7 +107,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         triggerAnimation('playing');
 
         // 2. Trigger Floating Item Effect
-        const level = Math.floor(myPet.experience / 100) + 1;
+        const level = myPet.stage; // Use stage as level
         const itemSrc = getAssetForLevel('TOY', level);
         setFloatingItem({ src: itemSrc, type: 'toy' });
         setTimeout(() => setFloatingItem(null), 1000); // Clear after animation
@@ -114,7 +119,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
     };
 
     const getPetImageSrc = (pet: Pet) => {
-        if (pet.stage === PetStage.EGG) return PET_ASSETS.EGG;
+        if (pet.stage === 1) return PET_ASSETS.EGG;
         switch (pet.type) {
             case PetType.DRAGON: return PET_ASSETS.DRAGON;
             case PetType.UNICORN: return PET_ASSETS.UNICORN;
@@ -123,10 +128,33 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         }
     };
 
-    const getPetSizeClass = (stage: PetStage) => {
-        if (stage === PetStage.EGG) return "w-32 h-32";
-        if (stage === PetStage.BABY) return "w-48 h-48";
-        return "w-64 h-64 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]";
+    // Calculate dynamic style based on Stage (Level)
+    const getPetVisuals = (stage: number) => {
+        // Base size
+        let baseSize = "w-32 h-32";
+        let scale = 1;
+        
+        if (stage === 1) { // Egg
+             baseSize = "w-32 h-32";
+        } else if (stage === 2) { // Baby
+             baseSize = "w-40 h-40";
+        } else {
+             // Teen -> Adult -> Mythic (Scale grows with every level)
+             baseSize = "w-56 h-56";
+             // Calculate scale factor: Starts at 1.0 at level 3, caps at 1.5 at level 50
+             const rawScale = 1 + ((stage - 3) * 0.02);
+             scale = Math.min(1.5, rawScale);
+        }
+
+        return { className: baseSize, scale };
+    };
+    
+    // Aura logic
+    const getAuraClass = (stage: number) => {
+        if (stage >= PetStage.MYTHIC) return 'mythic-aura'; // Rainbow/Blue
+        if (stage >= 20) return 'gold-aura'; // Gold
+        if (stage >= 10) return 'silver-aura'; // Silver
+        return '';
     };
 
     return (
@@ -191,9 +219,9 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                                 <h3 className="text-3xl font-display font-bold text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">{myPet.name}</h3>
                                 <div className="flex items-center gap-2 mt-1">
                                     <span className="bg-white/20 backdrop-blur-md text-white text-[10px] font-bold px-2 py-0.5 rounded-full border border-white/10 uppercase tracking-wider shadow-sm">
-                                        {myPet.stage === PetStage.EGG ? 'Vajíčko' : (myPet.stage === PetStage.BABY ? 'Miminko' : 'Dospělý')}
+                                        {myPet.stage === 1 ? 'Vajíčko' : `Level ${myPet.stage}`}
                                     </span>
-                                    <span className="text-indigo-200 text-xs font-bold drop-shadow-md">Level {Math.floor(myPet.experience / 100) + 1}</span>
+                                    {myPet.stage >= PetStage.MYTHIC && <span className="text-yellow-300 text-xs font-bold drop-shadow-md flex items-center gap-1"><Sparkles size={10}/> Mythic</span>}
                                 </div>
                             </div>
                             
@@ -233,18 +261,41 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                             {/* Spotlight Effect */}
                             <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-white/10 blur-[60px] rounded-full pointer-events-none"></div>
                             
+                            {/* MYTHIC WINGS (Background Layer) */}
+                            {myPet.stage >= PetStage.LEGEND && (
+                                <div className="absolute w-[400px] opacity-40 animate-pulse-slow z-0">
+                                   <div className="w-full h-full flex justify-center">
+                                       <img src={ACCESSORIES.WAND} className="w-64 h-64 blur-sm rotate-45 opacity-50 absolute left-0" />
+                                       <img src={ACCESSORIES.WAND} className="w-64 h-64 blur-sm -rotate-45 opacity-50 absolute right-0" />
+                                   </div>
+                                </div>
+                            )}
+
                             {/* The Pet Container */}
-                            <div className={`relative transition-transform duration-500 flex items-center justify-center ${
+                            <div className={`relative transition-transform duration-500 flex items-center justify-center z-10 ${
                                 animationClass === 'eating' ? 'scale-110' : 
                                 animationClass === 'playing' ? 'animate-bounce' : 
                                 'animate-pulse-slow'
                             }`}>
+                                {/* AURA EFFECT */}
+                                <div className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[120%] h-[120%] rounded-full blur-xl pointer-events-none ${getAuraClass(myPet.stage)}`}></div>
+
+                                {/* CROWN OVERLAY (High Level) */}
+                                {myPet.stage >= PetStage.MYTHIC && (
+                                     <img 
+                                        src={ACCESSORIES.CROWN} 
+                                        className="absolute -top-16 w-16 h-16 z-20 animate-bounce drop-shadow-lg"
+                                        alt="Crown"
+                                     />
+                                )}
+
                                 <img 
                                     src={getPetImageSrc(myPet)} 
                                     alt="Pet" 
-                                    className={`object-contain transition-all duration-700 ${getPetSizeClass(myPet.stage)}`}
+                                    className={`object-contain transition-all duration-700 ${getPetVisuals(myPet.stage).className}`}
                                     style={{
-                                        filter: 'drop-shadow(0px 10px 20px rgba(0,0,0,0.5))'
+                                        filter: 'drop-shadow(0px 10px 20px rgba(0,0,0,0.5))',
+                                        transform: `scale(${getPetVisuals(myPet.stage).scale})`
                                     }}
                                 />
 
@@ -261,7 +312,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
 
                                 {/* Feedback Bubble */}
                                 {message && (
-                                    <div className="absolute -top-20 left-1/2 -translate-x-1/2 bg-white text-brand-dark px-4 py-2 rounded-2xl font-bold text-sm shadow-xl whitespace-nowrap animate-bounce z-50 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-[8px] after:border-transparent after:border-t-white">
+                                    <div className="absolute -top-24 left-1/2 -translate-x-1/2 bg-white text-brand-dark px-4 py-2 rounded-2xl font-bold text-sm shadow-xl whitespace-nowrap animate-bounce z-50 after:content-[''] after:absolute after:top-full after:left-1/2 after:-translate-x-1/2 after:border-[8px] after:border-transparent after:border-t-white">
                                         {message}
                                     </div>
                                 )}
@@ -337,6 +388,16 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                 }
                 .animate-play-item {
                     animation: play-item 1s ease-in-out forwards;
+                }
+                
+                .silver-aura {
+                    background: radial-gradient(circle, rgba(192,192,192,0.6) 0%, rgba(255,255,255,0) 70%);
+                }
+                .gold-aura {
+                    background: radial-gradient(circle, rgba(255,215,0,0.6) 0%, rgba(255,165,0,0) 70%);
+                }
+                .mythic-aura {
+                    background: radial-gradient(circle, rgba(0,255,255,0.6) 0%, rgba(255,0,255,0.3) 50%, rgba(0,0,0,0) 80%);
                 }
             `}</style>
         </div>

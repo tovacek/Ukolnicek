@@ -29,6 +29,10 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
     
     const scrollRef = useRef<HTMLDivElement>(null);
 
+    // Calculate Age
+    const currentYear = new Date().getFullYear();
+    const childAge = currentUser?.birthYear ? currentYear - currentUser.birthYear : 8; // Default to 8 if not set
+
     useEffect(() => {
         let timer: any;
         if (gameState === 'PLAYING' && timeLeft > 0) {
@@ -70,7 +74,7 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
         
         // Try to find a question that hasn't been used yet
         do {
-            q = generateQuestion(type);
+            q = generateQuestion(type, childAge);
             attempts++;
         } while (currentUsedIds.includes(q.id) && attempts < 20);
 

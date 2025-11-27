@@ -28,6 +28,7 @@ export interface User {
   createdAt?: string; // ISO Date string of account creation
   towerHighScoreMath?: number;
   towerHighScoreEnglish?: number;
+  birthYear?: number;
 }
 
 export enum TaskStatus {
@@ -83,6 +84,16 @@ export interface Goal {
   imageUrl?: string;
 }
 
+export interface CalendarEvent {
+  id: string;
+  familyId: string;
+  childId: string;
+  title: string;
+  dayIndex: number; // 0=Monday ... 6=Sunday
+  time: string; // "14:30"
+  color?: string;
+}
+
 export interface GameResult {
   id: string;
   familyId: string;
@@ -115,7 +126,10 @@ export enum PetType {
 export enum PetStage {
   EGG = 1,
   BABY = 2,
-  ADULT = 3
+  TEEN = 5,
+  ADULT = 10,
+  MYTHIC = 20,
+  LEGEND = 30
 }
 
 export interface Pet {
@@ -124,7 +138,7 @@ export interface Pet {
   childId: string;
   name: string;
   type: PetType;
-  stage: PetStage;
+  stage: number; // Changed to number to support infinite levels, though we use Enum for milestones
   health: number; // 0-100
   happiness: number; // 0-100
   experience: number; // 0-100 (resets on evolution)

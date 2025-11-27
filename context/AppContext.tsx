@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, GameResult, Pet, PetType, PetStage } from '../types';
+import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, GameResult, Pet, PetType, PetStage, CalendarEvent } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
@@ -22,6 +22,7 @@ interface AppContextType {
   notifications: AppNotification[];
   gameResults: GameResult[];
   pets: Pet[];
+  calendarEvents: CalendarEvent[];
   
   // Auth Methods
   loginFamily: (email: string, password: string) => Promise<{success: boolean, error?: string}>;
@@ -39,8 +40,8 @@ interface AppContextType {
   getChildren: () => User[];
   getTasksForChild: (childId: string, date?: string) => Task[];
   addPointsToChild: (childId: string, points: number, money: number) => void;
-  addChild: (name: string) => void;
-  updateChild: (id: string, name: string, avatarUrl?: string, pin?: string) => void;
+  addChild: (name: string, birthYear?: number) => void;
+  updateChild: (id: string, name: string, avatarUrl?: string, pin?: string, birthYear?: number) => void;
   deleteChild: (id: string) => void;
   processPayout: (childId: string) => void;
   convertPointsToMoney: (childId: string, pointsToConvert: number) => void;
@@ -59,6 +60,10 @@ interface AppContextType {
   adoptPet: (type: PetType, name: string) => Promise<void>;
   feedPet: (petId: string) => Promise<{success: boolean, message: string}>;
   playWithPet: (petId: string) => Promise<{success: boolean, message: string}>;
+
+  // Calendar Methods
+  addCalendarEvent: (event: CalendarEvent) => Promise<void>;
+  deleteCalendarEvent: (eventId: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -80,7 +85,8 @@ const mapUserFromDb = (u: any): User => ({
   lastLoginRewardDate: u.last_login_reward_date,
   createdAt: u.created_at,
   towerHighScoreMath: u.tower_high_score_math || 0,
-  towerHighScoreEnglish: u.tower_high_score_english || 0
+  towerHighScoreEnglish: u.tower_high_score_english || 0,
+  birthYear: u.birth_year
 });
 
 const mapUserToDb = (u: User) => ({
@@ -98,7 +104,8 @@ const mapUserToDb = (u: User) => ({
   allowance_settings: u.allowanceSettings,
   last_login_reward_date: u.lastLoginRewardDate,
   tower_high_score_math: u.towerHighScoreMath,
-  tower_high_score_english: u.towerHighScoreEnglish
+  tower_high_score_english: u.towerHighScoreEnglish,
+  birth_year: u.birthYear
 });
 
 const mapTaskFromDb = (t: any): Task => ({
@@ -172,11 +179,21 @@ const mapPetFromDb = (p: any): Pet => ({
   childId: p.child_id,
   name: p.name,
   type: p.type as PetType,
-  stage: p.stage as PetStage,
+  stage: p.stage,
   health: p.health,
   happiness: p.happiness,
   experience: p.experience,
   lastInteraction: p.last_interaction
+});
+
+const mapCalendarEventFromDb = (e: any): CalendarEvent => ({
+    id: e.id,
+    familyId: e.family_id,
+    childId: e.child_id,
+    title: e.title,
+    dayIndex: e.day_index,
+    time: e.time,
+    color: e.color
 });
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -192,6 +209,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [gameResults, setGameResults] = useState<GameResult[]>([]);
   const [pets, setPets] = useState<Pet[]>([]);
+  const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
 
   // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
@@ -221,6 +239,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setGoals([]);
         setGameResults([]);
         setPets([]);
+        setCalendarEvents([]);
         return;
     }
 
@@ -246,6 +265,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const { data: gamesData } = await supabase.from('game_results').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
       if (gamesData) setGameResults(gamesData.map(mapGameResultFromDb));
+
+      const { data: eventsData } = await supabase.from('calendar_events').select('*').eq('family_id', familyId);
+      if (eventsData) setCalendarEvents(eventsData.map(mapCalendarEventFromDb));
 
       const { data: petsData } = await supabase.from('pets').select('*').eq('family_id', familyId);
       if (petsData) {
@@ -473,7 +495,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await supabase.from('users').update(updates).eq('id', childId);
   };
 
-  const addChild = async (name: string) => {
+  const addChild = async (name: string, birthYear?: number) => {
     const newChild: User = {
       id: Math.random().toString(36).substr(2, 9),
       familyId: familyId!,
@@ -482,24 +504,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       avatarUrl: '',
       points: 0,
       balance: 0,
-      pin: ''
+      pin: '',
+      birthYear
     };
     setUsers(prev => [...prev, newChild]);
     await supabase.from('users').insert(mapUserToDb(newChild));
     fetchData();
   };
 
-  const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string) => {
+  const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string, birthYear?: number) => {
     const updates: any = { 
         name, 
         avatarUrl: avatarUrl || '',
-        ...(pin !== undefined && { pin })
+        ...(pin !== undefined && { pin }),
+        ...(birthYear !== undefined && { birthYear })
     };
 
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
     
     const dbUpdates: any = { name, avatar_url: updates.avatarUrl };
     if (pin !== undefined) dbUpdates.pin = pin;
+    if (birthYear !== undefined) dbUpdates.birth_year = birthYear;
 
     const { error } = await supabase.from('users').update(dbUpdates).eq('id', id);
     if (error) console.error("Update Child Error:", error);
@@ -853,7 +878,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const newHealth = Math.min(100, pet.health + 20);
-      const newXP = pet.experience + 5;
       const now = new Date().toISOString();
 
       // Deduct points
@@ -862,16 +886,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, points: newPoints } : u));
       await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
 
-      // Update Pet
-      await updatePetStats(petId, { health: newHealth, experience: newXP, lastInteraction: now });
+      // Check for level up
+      const newXP = pet.experience + 5;
+      let nextStage = pet.stage;
       
-      // Check evolution
-      if (newXP >= 100 && pet.stage < PetStage.ADULT) {
-          evolvePet(petId, pet.stage + 1);
-          return { success: true, message: 'Mňam! A navíc se vyvíjím!' };
+      if (newXP >= 100) {
+          nextStage = pet.stage + 1;
+          await evolvePet(petId, nextStage);
+          await updatePetStats(petId, { health: newHealth, lastInteraction: now }); // Stats updated in evolve too, but ensure health
+          return { success: true, message: `Mňam! Vyrostl jsem na úroveň ${nextStage}!` };
+      } else {
+          await updatePetStats(petId, { health: newHealth, experience: newXP, lastInteraction: now });
+          return { success: true, message: 'Mňam! To bylo dobré.' };
       }
-
-      return { success: true, message: 'Mňam! To bylo dobré.' };
   };
 
   const playWithPet = async (petId: string): Promise<{success: boolean, message: string}> => {
@@ -885,7 +912,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const newHappiness = Math.min(100, pet.happiness + 20);
-      const newXP = pet.experience + 10;
       const now = new Date().toISOString();
 
       // Deduct points
@@ -894,16 +920,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, points: newPoints } : u));
       await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
 
-      // Update Pet
-      await updatePetStats(petId, { happiness: newHappiness, experience: newXP, lastInteraction: now });
+      // Check for level up
+      const newXP = pet.experience + 10;
+      let nextStage = pet.stage;
 
-      // Check evolution
-      if (newXP >= 100 && pet.stage < PetStage.ADULT) {
-          evolvePet(petId, pet.stage + 1);
-          return { success: true, message: 'Jupí! A navíc se vyvíjím!' };
+      if (newXP >= 100) {
+          nextStage = pet.stage + 1;
+          await evolvePet(petId, nextStage);
+          await updatePetStats(petId, { happiness: newHappiness, lastInteraction: now });
+          return { success: true, message: `Jupí! Vyrostl jsem na úroveň ${nextStage}!` };
+      } else {
+          await updatePetStats(petId, { happiness: newHappiness, experience: newXP, lastInteraction: now });
+          return { success: true, message: 'To byla zábava!' };
       }
-
-      return { success: true, message: 'To byla zábava!' };
   };
 
   const updatePetStats = async (petId: string, updates: Partial<Pet>) => {
@@ -919,8 +948,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await supabase.from('pets').update(dbUpdates).eq('id', petId);
   };
 
-  const evolvePet = async (petId: string, newStage: PetStage) => {
+  const evolvePet = async (petId: string, newStage: number) => {
+      // Reset XP to 0 on level up
       await updatePetStats(petId, { stage: newStage, experience: 0 });
+  };
+
+  // --- CALENDAR LOGIC ---
+
+  const addCalendarEvent = async (event: CalendarEvent) => {
+      if (!familyId) return;
+      setCalendarEvents(prev => [...prev, event]);
+      
+      await supabase.from('calendar_events').insert({
+          id: event.id,
+          family_id: familyId,
+          child_id: event.childId,
+          title: event.title,
+          day_index: event.dayIndex,
+          time: event.time,
+          color: event.color
+      });
+  };
+
+  const deleteCalendarEvent = async (eventId: string) => {
+      setCalendarEvents(prev => prev.filter(e => e.id !== eventId));
+      await supabase.from('calendar_events').delete().eq('id', eventId);
   };
 
   return (
@@ -934,6 +986,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       notifications,
       gameResults,
       pets,
+      calendarEvents,
       loginFamily,
       registerFamily,
       selectProfile,
@@ -964,7 +1017,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       markNotificationRead,
       adoptPet,
       feedPet,
-      playWithPet
+      playWithPet,
+      addCalendarEvent,
+      deleteCalendarEvent
     }}>
       {children}
     </AppContext.Provider>

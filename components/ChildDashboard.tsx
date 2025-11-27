@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { TaskStatus, Task, UserRole, Goal } from '../types';
-import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2, Egg } from 'lucide-react';
+import { TaskStatus, Task, UserRole, Goal, PetType } from '../types';
+import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2, Egg, Heart, Smile } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 import AvatarDisplay from './AvatarDisplay';
 import ImageUploader from './ImageUploader';
 import ProfilePhotoModal from './ProfilePhotoModal';
 import TowerGame from './TowerGame';
 import PetRoom from './PetRoom';
+import ScheduleModal from './ScheduleModal';
 
 const ChildDashboard: React.FC = () => {
-  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, updateChild, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward } = useApp();
+  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, updateChild, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward, pets, calendarEvents } = useApp();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [motivation, setMotivation] = useState<string>("");
@@ -57,6 +58,9 @@ const ChildDashboard: React.FC = () => {
   // Pet Room Modal State
   const [showPetRoom, setShowPetRoom] = useState(false);
 
+  // Schedule Modal State
+  const [showSchedule, setShowSchedule] = useState(false);
+
   // Delete Confirmation States
   const [deleteGoalConfirmation, setDeleteGoalConfirmation] = useState<{isOpen: boolean, goalId: string | null}>({ isOpen: false, goalId: null });
   const [deleteTaskConfirmation, setDeleteTaskConfirmation] = useState<{isOpen: boolean, taskId: string | null}>({ isOpen: false, taskId: null });
@@ -64,6 +68,7 @@ const ChildDashboard: React.FC = () => {
   // Get ALL tasks for child
   const tasks = currentUser ? getTasksForChild(currentUser.id) : [];
   const childGoals = currentUser ? goals.filter(g => g.childId === currentUser.id) : [];
+  const myPet = currentUser ? pets.find(p => p.childId === currentUser.id) : null;
 
   // Calculate Daily Progress
   const todayStr = new Date().toISOString().split('T')[0];
@@ -82,6 +87,29 @@ const ChildDashboard: React.FC = () => {
   const pendingTasks = tasks.filter(t => t.status === TaskStatus.PENDING_APPROVAL);
   const completedTasks = tasks.filter(t => t.status === TaskStatus.APPROVED);
   const doneList = [...pendingTasks, ...completedTasks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  // Pet Assets for Dashboard Preview
+  const BASE_URL = "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis";
+  const PET_ASSETS = {
+      EGG: `${BASE_URL}/Food/Egg.png`,
+      DRAGON: `${BASE_URL}/Animals/Dragon.png`,
+      UNICORN: `${BASE_URL}/Animals/Unicorn.png`,
+      DINO: `${BASE_URL}/Animals/T-Rex.png`
+  };
+
+  const getPetDashboardImage = (pet: any) => {
+      if (pet.stage === 1) return PET_ASSETS.EGG;
+      switch (pet.type) {
+          case PetType.DRAGON: return PET_ASSETS.DRAGON;
+          case PetType.UNICORN: return PET_ASSETS.UNICORN;
+          case PetType.DINO: return PET_ASSETS.DINO;
+          default: return PET_ASSETS.EGG;
+      }
+  };
+  
+  // Today's Calendar Events
+  const currentDayIndex = new Date().getDay() || 7; // 1-7
+  const todaysEvents = currentUser ? calendarEvents.filter(e => e.childId === currentUser.id && e.dayIndex === currentDayIndex).sort((a,b) => a.time.localeCompare(b.time)) : [];
 
   useEffect(() => {
     const checkReward = async () => {
@@ -341,7 +369,7 @@ const ChildDashboard: React.FC = () => {
               <Star fill="currentColor" size={22} />
             </div>
             <span className="text-3xl font-display font-bold tracking-tight">{currentUser.points}</span>
-            <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium mb-1">Body</p>
+            <p className="text-xs text-brand-yellow/60 uppercase tracking-wider font-medium mb-1">Body</p>
             
             {(currentUser.points || 0) >= 10 && (
                 <button 
@@ -360,7 +388,7 @@ const ChildDashboard: React.FC = () => {
               <Coins size={22} />
             </div>
             <span className="text-3xl font-display font-bold tracking-tight">{currentUser.balance} <span className="text-lg">Kč</span></span>
-            <p className="text-[10px] uppercase tracking-wider opacity-60 font-medium">Kasička</p>
+            <p className="text-xs text-brand-green/60 uppercase tracking-wider font-medium">Kasička</p>
           </div>
           <div className="absolute top-3 right-3 opacity-30">
               <History size={14} />
@@ -419,34 +447,95 @@ const ChildDashboard: React.FC = () => {
 
       {/* Activities Grid */}
       <div className="px-4 mb-6 grid grid-cols-2 gap-4">
+        {/* Schedule Card */}
+        <button 
+            onClick={() => setShowSchedule(true)}
+            className="col-span-2 bg-gradient-to-r from-teal-400 to-teal-600 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden flex flex-row items-center justify-between"
+        >
+            <div className="relative z-10 text-left">
+                <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Calendar size={18}/> Můj Rozvrh</h3>
+                {todaysEvents.length > 0 ? (
+                    <div className="flex flex-col gap-1">
+                         <p className="text-teal-100 text-[10px] font-bold uppercase">Dnes:</p>
+                         {todaysEvents.slice(0, 2).map((e, idx) => (
+                             <div key={idx} className="flex items-center gap-2 text-xs">
+                                 <span className="font-bold bg-white/20 px-1.5 rounded text-[10px]">{e.time}</span>
+                                 <span className="truncate max-w-[120px]">{e.title}</span>
+                             </div>
+                         ))}
+                         {todaysEvents.length > 2 && <span className="text-[10px] opacity-80">a další...</span>}
+                    </div>
+                ) : (
+                    <p className="text-teal-100 text-xs">Žádné kroužky na dnešek.</p>
+                )}
+            </div>
+            <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
+                <Calendar size={32} />
+            </div>
+        </button>
+
         {/* Game Card */}
         <button 
             onClick={() => setShowGame(true)}
-            className="col-span-1 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl p-5 text-white shadow-lg hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden flex flex-col justify-between h-32"
+            className="col-span-1 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl p-4 text-white shadow-lg hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden flex flex-col justify-between h-40"
         >
             <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 hover:opacity-100 transition-opacity"></div>
             <div className="relative z-10">
                 <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Gamepad2 size={18}/> Hra</h3>
                 <p className="text-violet-200 text-[10px]">Stavitel Věže</p>
             </div>
-            <div className="bg-white/20 self-end p-2 rounded-full relative z-10 backdrop-blur-sm">
-                <Trophy className="text-yellow-300" size={20} />
+            <div className="flex items-center justify-center flex-1">
+                <Trophy className="text-yellow-300 w-12 h-12 drop-shadow-md" />
             </div>
         </button>
 
-        {/* Pet Card */}
+        {/* Pet Card (Updated with Live Preview) */}
         <button 
             onClick={() => setShowPetRoom(true)}
-            className="col-span-1 bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-5 text-white shadow-lg hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden flex flex-col justify-between h-32"
+            className="col-span-1 bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-4 text-white shadow-lg hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden flex flex-col justify-between h-40 group"
         >
             <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 hover:opacity-100 transition-opacity"></div>
-            <div className="relative z-10">
-                <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Egg size={18}/> Mazlíček</h3>
-                <p className="text-orange-100 text-[10px]">Starej se o něj!</p>
-            </div>
-            <div className="bg-white/20 self-end p-2 rounded-full relative z-10 backdrop-blur-sm text-2xl">
-                🐉
-            </div>
+            
+            {myPet ? (
+                <>
+                    <div className="relative z-10 w-full flex justify-between items-start">
+                        <div>
+                           <h3 className="font-bold font-display flex items-center gap-1 text-sm">{myPet.name}</h3>
+                           <p className="text-orange-100 text-[10px]">Lvl {myPet.stage}</p>
+                        </div>
+                        <img 
+                            src={getPetDashboardImage(myPet)} 
+                            alt="Pet" 
+                            className="w-16 h-16 object-contain absolute right-[-10px] top-4 drop-shadow-md group-hover:scale-110 transition-transform duration-300" 
+                        />
+                    </div>
+                    
+                    <div className="relative z-10 w-full mt-auto space-y-1">
+                        <div className="flex items-center gap-1">
+                            <Heart size={8} className="fill-red-200 text-red-200" />
+                            <div className="h-1.5 flex-1 bg-black/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-red-300" style={{ width: `${myPet.health}%` }}></div>
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <Smile size={8} className="fill-yellow-200 text-yellow-200" />
+                            <div className="h-1.5 flex-1 bg-black/20 rounded-full overflow-hidden">
+                                <div className="h-full bg-yellow-300" style={{ width: `${myPet.happiness}%` }}></div>
+                            </div>
+                        </div>
+                    </div>
+                </>
+            ) : (
+                <>
+                     <div className="relative z-10">
+                        <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Egg size={18}/> Mazlíček</h3>
+                        <p className="text-orange-100 text-[10px]">Adoptuj si mě!</p>
+                    </div>
+                    <div className="flex items-center justify-center flex-1">
+                        <img src={PET_ASSETS.EGG} className="w-12 h-12 drop-shadow-md" alt="Egg" />
+                    </div>
+                </>
+            )}
         </button>
       </div>
 
@@ -670,6 +759,11 @@ const ChildDashboard: React.FC = () => {
       {/* Pet Room Modal */}
       {showPetRoom && (
           <PetRoom onClose={() => setShowPetRoom(false)} />
+      )}
+
+      {/* Schedule Modal */}
+      {showSchedule && currentUser && (
+          <ScheduleModal childId={currentUser.id} onClose={() => setShowSchedule(false)} />
       )}
 
       {/* Custom Task Modal */}
