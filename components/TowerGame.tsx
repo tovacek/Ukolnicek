@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { X, Trophy, Clock, Brain, Languages, Check, AlertTriangle, Star } from 'lucide-react';
 import { generateQuestion, Question, QuestionType } from '../services/gameQuestions';
 import { useApp } from '../context/AppContext';
@@ -26,6 +26,8 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
     
     // Track questions used in this session to prevent repetition
     const [usedQuestionIds, setUsedQuestionIds] = useState<string[]>([]);
+    
+    const scrollRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         let timer: any;
@@ -38,6 +40,13 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
         }
         return () => clearInterval(timer);
     }, [timeLeft, gameState]);
+
+    // Auto-scroll to top of tower when blocks are added
+    useEffect(() => {
+        if (scrollRef.current) {
+            scrollRef.current.scrollTop = 0; // Keep view at the bottom (visually top of reversed col)
+        }
+    }, [blocks]);
 
     const startGame = (type: QuestionType) => {
         setCategory(type);
@@ -145,9 +154,9 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
                 )}
 
                 {gameState === 'PLAYING' && (
-                    <div className="flex-1 flex flex-col relative">
+                    <div className="flex-1 flex flex-col relative h-full min-h-0">
                         {/* Game Header */}
-                        <div className="flex justify-between items-center mb-4 z-10 relative">
+                        <div className="flex justify-between items-center mb-4 z-10 relative flex-shrink-0">
                             <div className="font-bold text-xl text-brand-dark bg-white/80 px-3 py-1 rounded-full shadow-sm border border-gray-100">
                                 Skóre: {score}
                             </div>
@@ -158,22 +167,26 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
                         </div>
 
                         {/* Tower Visuals */}
-                        <div className="flex-1 bg-sky-50 rounded-2xl border border-sky-100 relative overflow-hidden flex flex-col-reverse items-center justify-start p-4 mb-4 shadow-inner">
+                        <div 
+                            ref={scrollRef}
+                            className="flex-1 min-h-0 bg-sky-50 rounded-2xl border border-sky-100 relative overflow-y-auto flex flex-col-reverse items-center justify-start p-4 mb-4 shadow-inner"
+                        >
                              <div className="w-full h-4 bg-green-400 absolute bottom-0 left-0"></div>
                              <div className="flex flex-col-reverse w-full items-center transition-all duration-300 pb-4">
                                  {blocks.map((id, index) => (
-                                     <div key={id} className="w-32 h-10 bg-gradient-to-r from-orange-400 to-orange-500 border-2 border-orange-600 rounded-md shadow-sm mb-0.5 animate-bounce-short flex items-center justify-center text-white font-bold text-xs z-10">
+                                     <div key={id} className="w-32 h-10 bg-gradient-to-r from-orange-400 to-orange-500 border-2 border-orange-600 rounded-md shadow-sm mb-0.5 animate-bounce-short flex items-center justify-center text-white font-bold text-xs z-10 flex-shrink-0">
                                          {index + 1}
                                      </div>
                                  ))}
                              </div>
-                             <div className="absolute top-10 left-10 text-white opacity-40"><span className="text-4xl">☁️</span></div>
-                             <div className="absolute top-20 right-10 text-white opacity-40"><span className="text-3xl">☁️</span></div>
+                             {/* Clouds decoration */}
+                             <div className="absolute top-10 left-10 text-white opacity-40 pointer-events-none"><span className="text-4xl">☁️</span></div>
+                             <div className="absolute top-20 right-10 text-white opacity-40 pointer-events-none"><span className="text-3xl">☁️</span></div>
                         </div>
 
                         {/* Question Area */}
                         {currentQuestion && (
-                            <div className="z-20 bg-white p-2">
+                            <div className="z-20 bg-white p-2 flex-shrink-0">
                                 <h3 className="text-center text-xl font-bold text-slate-800 mb-4 bg-slate-50 p-3 rounded-xl border border-slate-100">{currentQuestion.text}</h3>
                                 <div className="grid grid-cols-3 gap-3">
                                     {currentQuestion.options.map((opt, idx) => (
