@@ -2,32 +2,52 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { CalendarEvent } from '../types';
-import { X, Plus, Trash2, Calendar, Clock, Check } from 'lucide-react';
+import { X, Plus, Trash2, Calendar, Clock, Check, Repeat } from 'lucide-react';
 
 interface ScheduleModalProps {
     childId: string;
     onClose: () => void;
-    isReadOnly?: boolean; // If parent wants to restrict (though request says parent can add too)
+    isReadOnly?: boolean; 
 }
 
 const ScheduleModal: React.FC<ScheduleModalProps> = ({ childId, onClose }) => {
     const { calendarEvents, addCalendarEvent, deleteCalendarEvent, familyId, users } = useApp();
-    const [selectedDay, setSelectedDay] = useState<number>(new Date().getDay() || 7); // 1-7 (Mon-Sun)
+    const currentDayIndex = new Date().getDay() || 7; // 1-7
+    const [selectedDay, setSelectedDay] = useState<number>(currentDayIndex);
     
     // Add Event State
     const [isAdding, setIsAdding] = useState(false);
     const [newTitle, setNewTitle] = useState('');
     const [newTime, setNewTime] = useState('14:00');
     const [newColor, setNewColor] = useState('bg-blue-100 text-blue-700');
+    const [isRecurring, setIsRecurring] = useState(true);
+
+    // Calculate dates for current week
+    const getWeekDates = () => {
+        const now = new Date();
+        const currentDay = now.getDay() || 7; 
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - currentDay + 1);
+        
+        const weekDates = [];
+        for (let i = 0; i < 7; i++) {
+            const date = new Date(monday);
+            date.setDate(monday.getDate() + i);
+            weekDates.push(date);
+        }
+        return weekDates;
+    };
+
+    const weekDates = getWeekDates();
 
     const days = [
-        { id: 1, label: 'Po', full: 'Pondělí' },
-        { id: 2, label: 'Út', full: 'Úterý' },
-        { id: 3, label: 'St', full: 'Středa' },
-        { id: 4, label: 'Čt', full: 'Čtvrtek' },
-        { id: 5, label: 'Pá', full: 'Pátek' },
-        { id: 6, label: 'So', full: 'Sobota' },
-        { id: 7, label: 'Ne', full: 'Neděle' },
+        { id: 1, label: 'Po', full: 'Pondělí', date: weekDates[0] },
+        { id: 2, label: 'Út', full: 'Úterý', date: weekDates[1] },
+        { id: 3, label: 'St', full: 'Středa', date: weekDates[2] },
+        { id: 4, label: 'Čt', full: 'Čtvrtek', date: weekDates[3] },
+        { id: 5, label: 'Pá', full: 'Pátek', date: weekDates[4] },
+        { id: 6, label: 'So', full: 'Sobota', date: weekDates[5] },
+        { id: 7, label: 'Ne', full: 'Neděle', date: weekDates[6] },
     ];
 
     const colors = [
@@ -40,7 +60,21 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ childId, onClose }) => {
     ];
 
     const childName = users.find(u => u.id === childId)?.name || 'Dítě';
-    const eventsForDay = calendarEvents.filter(e => e.childId === childId && e.dayIndex === selectedDay).sort((a,b) => a.time.localeCompare(b.time));
+    
+    // Filter events for selected day
+    const selectedDateStr = days.find(d => d.id === selectedDay)?.date.toISOString().split('T')[0];
+    
+    const eventsForDay = calendarEvents.filter(e => {
+        if (e.childId !== childId) return false;
+        
+        // Match recurring day
+        if (e.isRecurring && e.dayIndex === selectedDay) return true;
+        
+        // Match specific date
+        if (!e.isRecurring && e.specificDate === selectedDateStr) return true;
+        
+        return false;
+    }).sort((a,b) => a.time.localeCompare(b.time));
 
     const handleAdd = () => {
         if (!newTitle.trim() || !familyId) return;
@@ -52,12 +86,15 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ childId, onClose }) => {
             title: newTitle,
             dayIndex: selectedDay,
             time: newTime,
-            color: newColor
+            color: newColor,
+            isRecurring: isRecurring,
+            specificDate: !isRecurring ? selectedDateStr : undefined
         };
         
         addCalendarEvent(newEvent);
         setIsAdding(false);
         setNewTitle('');
+        setIsRecurring(true);
     };
 
     return (
@@ -80,9 +117,10 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ childId, onClose }) => {
                         <button
                             key={day.id}
                             onClick={() => setSelectedDay(day.id)}
-                            className={`flex-1 py-2 px-1 rounded-lg text-sm font-bold transition-all min-w-[40px] ${selectedDay === day.id ? 'bg-white shadow-md text-brand-blue' : 'text-gray-500 hover:text-gray-700'}`}
+                            className={`flex-1 py-2 px-1 rounded-lg text-xs md:text-sm font-bold transition-all min-w-[45px] flex flex-col items-center justify-center ${selectedDay === day.id ? 'bg-white shadow-md text-brand-blue' : 'text-gray-500 hover:text-gray-700'}`}
                         >
-                            {day.label}
+                            <span>{day.label}</span>
+                            <span className="text-[10px] opacity-70 font-medium">{day.date.getDate()}.{day.date.getMonth()+1}.</span>
                         </button>
                     ))}
                 </div>
@@ -110,7 +148,7 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ childId, onClose }) => {
                                 onChange={e => setNewTitle(e.target.value)}
                                 className="w-full text-lg font-bold text-slate-800 placeholder-slate-300 mb-3 outline-none"
                              />
-                             <div className="flex flex-wrap gap-3 items-center justify-between">
+                             <div className="flex flex-wrap gap-3 items-center justify-between mb-3">
                                  <input 
                                     type="time" 
                                     value={newTime} 
@@ -126,10 +164,18 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ childId, onClose }) => {
                                          ></button>
                                      ))}
                                  </div>
-                                 <div className="flex gap-2">
-                                     <button onClick={() => setIsAdding(false)} className="p-2 text-gray-400 hover:text-red-500"><X size={20}/></button>
-                                     <button onClick={handleAdd} disabled={!newTitle.trim()} className="p-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"><Check size={20}/></button>
+                             </div>
+                             
+                             <div className="flex items-center gap-2 mb-3 bg-blue-50 p-2 rounded-lg cursor-pointer" onClick={() => setIsRecurring(!isRecurring)}>
+                                 <div className={`w-5 h-5 rounded border flex items-center justify-center ${isRecurring ? 'bg-brand-blue border-brand-blue' : 'bg-white border-slate-300'}`}>
+                                     {isRecurring && <Check size={14} className="text-white"/>}
                                  </div>
+                                 <label className="text-sm font-bold text-slate-700 cursor-pointer flex items-center gap-1"><Repeat size={14}/> Opakovat každý týden</label>
+                             </div>
+
+                             <div className="flex gap-2 justify-end">
+                                 <button onClick={() => setIsAdding(false)} className="p-2 text-gray-400 hover:text-red-500"><X size={20}/></button>
+                                 <button onClick={handleAdd} disabled={!newTitle.trim()} className="p-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 disabled:opacity-50"><Check size={20}/></button>
                              </div>
                         </div>
                     )}
@@ -143,7 +189,11 @@ const ScheduleModal: React.FC<ScheduleModalProps> = ({ childId, onClose }) => {
                     ) : (
                         eventsForDay.map(event => (
                             <div key={event.id} className={`p-4 rounded-xl border flex items-center gap-4 relative group ${event.color || 'bg-white border-gray-100'}`}>
-                                <div className="font-bold text-slate-500 w-12 text-sm">{event.time}</div>
+                                <div className="font-bold text-slate-500 w-12 text-sm text-center">
+                                    {event.time}
+                                    {!event.isRecurring && <div className="text-[9px] uppercase tracking-wider text-slate-400 mt-1 font-normal">Jen dnes</div>}
+                                    {event.isRecurring && <div className="text-[9px] text-indigo-400 mt-1 flex justify-center"><Repeat size={10}/></div>}
+                                </div>
                                 <div className="flex-1 font-bold text-slate-800 text-lg">{event.title}</div>
                                 <button 
                                     onClick={() => deleteCalendarEvent(event.id)}

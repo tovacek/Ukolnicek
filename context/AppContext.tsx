@@ -195,7 +195,9 @@ const mapCalendarEventFromDb = (e: any): CalendarEvent => ({
     title: e.title,
     dayIndex: e.day_index,
     time: e.time,
-    color: e.color
+    color: e.color,
+    isRecurring: e.is_recurring !== false, // Default true for backward compatibility
+    specificDate: e.specific_date
 });
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -971,7 +973,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           title: event.title,
           day_index: event.dayIndex,
           time: event.time,
-          color: event.color
+          color: event.color,
+          is_recurring: event.isRecurring,
+          specific_date: event.specificDate
       });
   };
 

@@ -93,6 +93,8 @@ export interface CalendarEvent {
   dayIndex: number; // 1=Monday ... 7=Sunday
   time: string; // "14:30"
   color?: string;
+  isRecurring?: boolean; // New: True if weekly, False if one-time
+  specificDate?: string; // New: YYYY-MM-DD for one-time events
 }
 
 export interface GameResult {

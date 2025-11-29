@@ -109,7 +109,12 @@ const ChildDashboard: React.FC = () => {
   
   // Today's Calendar Events
   const currentDayIndex = new Date().getDay() || 7; // 1-7
-  const todaysEvents = currentUser ? calendarEvents.filter(e => e.childId === currentUser.id && e.dayIndex === currentDayIndex).sort((a,b) => a.time.localeCompare(b.time)) : [];
+  
+  const todaysEvents = currentUser ? calendarEvents.filter(e => {
+      if (e.childId !== currentUser.id) return false;
+      // Match recurring day OR specific date
+      return (e.isRecurring && e.dayIndex === currentDayIndex) || (!e.isRecurring && e.specificDate === todayStr);
+  }).sort((a,b) => a.time.localeCompare(b.time)) : [];
 
   useEffect(() => {
     const checkReward = async () => {
