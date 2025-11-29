@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Trophy, Clock, Brain, Languages, Check, AlertTriangle, Star } from 'lucide-react';
+import { X, Trophy, Clock, Brain, Languages, Check, AlertTriangle, Star, Zap } from 'lucide-react';
 import { generateQuestion, Question, QuestionType } from '../services/gameQuestions';
 import { useApp } from '../context/AppContext';
 
@@ -113,7 +113,7 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
         let msg = "";
         if (reward > 0) msg = `Perfektní hra! Rekord bez chyb! +${reward} Kč!`;
         else if (isNewRecord) msg = "Nový rekord!";
-        else if (pointsEarned > 0) msg = `Získáno +${pointsEarned} bodů do aplikace!`;
+        else if (pointsEarned > 0) msg = `Získáno +${pointsEarned} energie pro mazlíčka!`;
         
         setRewardMessage(msg);
     };
@@ -215,9 +215,9 @@ const TowerGame: React.FC<TowerGameProps> = ({ onClose }) => {
                         <p className="text-red-500 font-bold text-lg mb-6">{gameOverReason}</p>
                         
                         <div className="bg-brand-yellow/10 p-4 rounded-xl border border-brand-yellow/30 mb-6 w-full max-w-xs">
-                             <div className="text-sm font-bold text-brand-dark uppercase mb-1">Získané body</div>
+                             <div className="text-sm font-bold text-brand-dark uppercase mb-1">Získaná energie</div>
                              <div className="text-3xl font-bold text-brand-dark flex items-center justify-center gap-2">
-                                <Star fill="currentColor" className="text-brand-yellow" size={28} />
+                                <Zap fill="currentColor" className="text-brand-yellow" size={28} />
                                 +{earnedPointsDisplay}
                              </div>
                         </div>

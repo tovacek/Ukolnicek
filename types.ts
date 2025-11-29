@@ -18,7 +18,8 @@ export interface User {
   name: string;
   role: UserRole;
   avatarUrl?: string; // Stores URL or Base64 string of photo
-  points?: number; // Only for children
+  points?: number; // Only for children (Stars/Chores)
+  petPoints?: number; // Only for children (Energy/Games)
   balance?: number; // Only for children (CZK)
   password?: string; // Main Login Password (for Parents)
   pin?: string;      // Profile Lock PIN (for switching profiles)

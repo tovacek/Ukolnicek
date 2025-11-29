@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { TaskStatus, Task, UserRole, Goal, PetType } from '../types';
-import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2, Egg, Heart, Smile } from 'lucide-react';
+import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2, Egg, Heart, Smile, Zap } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 import AvatarDisplay from './AvatarDisplay';
 import ImageUploader from './ImageUploader';
@@ -356,42 +356,51 @@ const ChildDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Card */}
+        {/* Stats Card - Updated for Pet Points */}
         <div 
-            onClick={() => setShowHistory(true)}
-            className="w-full bg-brand-dark rounded-2xl p-5 text-white flex justify-around items-center shadow-lg shadow-brand-dark/20 hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden group cursor-pointer"
+            className="w-full bg-brand-dark rounded-2xl p-4 text-white shadow-lg shadow-brand-dark/20 relative overflow-hidden group"
         >
           <div className="absolute top-0 right-0 -mt-4 -mr-4 w-24 h-24 bg-white/5 rounded-full blur-2xl"></div>
           <div className="absolute bottom-0 left-0 -mb-4 -ml-4 w-20 h-20 bg-brand-yellow/10 rounded-full blur-xl"></div>
 
-          <div className="text-center relative z-10 flex flex-col items-center">
-            <div className="flex items-center justify-center gap-1 text-brand-yellow mb-1">
-              <Star fill="currentColor" size={22} />
-            </div>
-            <span className="text-3xl font-display font-bold tracking-tight">{currentUser.points}</span>
-            <p className="text-xs text-brand-yellow/60 uppercase tracking-wider font-medium mb-1">Body</p>
-            
-            {(currentUser.points || 0) >= 10 && (
-                <button 
-                    onClick={handleExchangeOpen}
-                    className="mt-1 bg-brand-yellow text-brand-dark rounded-full px-2 py-1 text-[10px] font-bold shadow-md hover:bg-white hover:scale-105 transition-all flex items-center gap-1"
-                >
-                    <Repeat size={10} /> Proměnit
-                </button>
-            )}
-          </div>
+          <div className="relative z-10 flex justify-between items-center divide-x divide-white/10">
+              
+              {/* CHORES POINTS (Stars) */}
+              <div className="flex-1 flex flex-col items-center p-2">
+                <div className="flex items-center justify-center gap-1 text-brand-yellow mb-1">
+                  <Star fill="currentColor" size={20} />
+                </div>
+                <span className="text-2xl font-display font-bold tracking-tight">{currentUser.points}</span>
+                <p className="text-[10px] text-brand-yellow/60 uppercase tracking-wider font-medium mb-1">Hvězdy</p>
+                {(currentUser.points || 0) >= 10 && (
+                    <button 
+                        onClick={handleExchangeOpen}
+                        className="bg-brand-yellow text-brand-dark rounded-full px-2 py-0.5 text-[10px] font-bold shadow-md hover:bg-white hover:scale-105 transition-all flex items-center gap-1"
+                    >
+                        <Repeat size={8} /> Směnit
+                    </button>
+                )}
+              </div>
 
-          <div className="w-px h-12 bg-gradient-to-b from-transparent via-white/20 to-transparent relative z-10"></div>
-          
-          <div className="text-center relative z-10">
-             <div className="flex items-center justify-center gap-1 text-brand-green mb-1">
-              <Coins size={22} />
-            </div>
-            <span className="text-3xl font-display font-bold tracking-tight">{currentUser.balance} <span className="text-lg">Kč</span></span>
-            <p className="text-xs text-brand-green/60 uppercase tracking-wider font-medium">Kasička</p>
-          </div>
-          <div className="absolute top-3 right-3 opacity-30">
-              <History size={14} />
+              {/* MONEY */}
+              <div className="flex-1 flex flex-col items-center p-2 cursor-pointer hover:bg-white/5 transition-colors rounded-lg" onClick={() => setShowHistory(true)}>
+                 <div className="flex items-center justify-center gap-1 text-brand-green mb-1">
+                  <Coins size={20} />
+                </div>
+                <span className="text-2xl font-display font-bold tracking-tight">{currentUser.balance} <span className="text-sm">Kč</span></span>
+                <p className="text-[10px] text-brand-green/60 uppercase tracking-wider font-medium">Kasička</p>
+                <div className="mt-1 text-[10px] text-gray-400 flex items-center gap-1"><History size={8}/> Historie</div>
+              </div>
+
+              {/* PET POINTS (Energy) */}
+              <div className="flex-1 flex flex-col items-center p-2">
+                <div className="flex items-center justify-center gap-1 text-cyan-400 mb-1">
+                  <Zap fill="currentColor" size={20} />
+                </div>
+                <span className="text-2xl font-display font-bold tracking-tight">{currentUser.petPoints || 0}</span>
+                <p className="text-[10px] text-cyan-400/60 uppercase tracking-wider font-medium">Energie</p>
+              </div>
+
           </div>
         </div>
 
@@ -482,7 +491,7 @@ const ChildDashboard: React.FC = () => {
             <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 hover:opacity-100 transition-opacity"></div>
             <div className="relative z-10">
                 <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Gamepad2 size={18}/> Hra</h3>
-                <p className="text-violet-200 text-[10px]">Stavitel Věže</p>
+                <p className="text-violet-200 text-[10px]">Vyhraj energii pro mazlíčka!</p>
             </div>
             <div className="flex items-center justify-center flex-1">
                 <Trophy className="text-yellow-300 w-12 h-12 drop-shadow-md" />

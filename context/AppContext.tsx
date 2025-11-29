@@ -77,6 +77,7 @@ const mapUserFromDb = (u: any): User => ({
   role: u.role as UserRole,
   avatarUrl: u.avatar_url,
   points: u.points,
+  petPoints: u.pet_points || 0,
   balance: u.balance,
   password: u.password,
   pin: u.pin || '', 
@@ -97,6 +98,7 @@ const mapUserToDb = (u: User) => ({
   role: u.role,
   avatar_url: u.avatarUrl,
   points: u.points,
+  pet_points: u.petPoints,
   balance: u.balance,
   password: u.password,
   pin: u.pin,
@@ -760,7 +762,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       let isNewRecord = false;
       let rewardMoney = 0;
       
-      const pointsEarned = correct;
+      const pointsEarned = correct; // 1 point per correct answer
 
       if (score > currentHigh) {
           isNewRecord = true;
@@ -790,9 +792,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       
       if (pointsEarned > 0) {
-          const newPoints = (currentUser.points || 0) + pointsEarned;
-          userUpdates.points = newPoints;
-          dbUpdates.points = newPoints;
+          // CHANGE: Points from games go to Pet Points (Energy)
+          const newPetPoints = (currentUser.petPoints || 0) + pointsEarned;
+          userUpdates.petPoints = newPetPoints;
+          dbUpdates.pet_points = newPetPoints;
       }
 
       const result: GameResult = {
@@ -873,18 +876,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!pet) return { success: false, message: 'Pet not found' };
 
       const cost = 10;
-      if ((currentUser.points || 0) < cost) {
-          return { success: false, message: 'Nedostatek bodů (Cena: 10)' };
+      // CHECK: Pet Points
+      if ((currentUser.petPoints || 0) < cost) {
+          return { success: false, message: 'Nedostatek energie (Cena: 10)' };
       }
 
       const newHealth = Math.min(100, pet.health + 20);
       const now = new Date().toISOString();
 
-      // Deduct points
-      const newPoints = (currentUser.points || 0) - cost;
-      setCurrentUser(prev => prev ? { ...prev, points: newPoints } : null);
-      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, points: newPoints } : u));
-      await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
+      // Deduct Pet Points (Energy)
+      const newPetPoints = (currentUser.petPoints || 0) - cost;
+      setCurrentUser(prev => prev ? { ...prev, petPoints: newPetPoints } : null);
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, petPoints: newPetPoints } : u));
+      await supabase.from('users').update({ pet_points: newPetPoints }).eq('id', currentUser.id);
 
       // Check for level up
       const newXP = pet.experience + 5;
@@ -907,18 +911,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!pet) return { success: false, message: 'Pet not found' };
 
       const cost = 5;
-       if ((currentUser.points || 0) < cost) {
-          return { success: false, message: 'Nedostatek bodů (Cena: 5)' };
+       // CHECK: Pet Points
+       if ((currentUser.petPoints || 0) < cost) {
+          return { success: false, message: 'Nedostatek energie (Cena: 5)' };
       }
 
       const newHappiness = Math.min(100, pet.happiness + 20);
       const now = new Date().toISOString();
 
-      // Deduct points
-      const newPoints = (currentUser.points || 0) - cost;
-      setCurrentUser(prev => prev ? { ...prev, points: newPoints } : null);
-      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, points: newPoints } : u));
-      await supabase.from('users').update({ points: newPoints }).eq('id', currentUser.id);
+      // Deduct Pet Points (Energy)
+      const newPetPoints = (currentUser.petPoints || 0) - cost;
+      setCurrentUser(prev => prev ? { ...prev, petPoints: newPetPoints } : null);
+      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, petPoints: newPetPoints } : u));
+      await supabase.from('users').update({ pet_points: newPetPoints }).eq('id', currentUser.id);
 
       // Check for level up
       const newXP = pet.experience + 10;
