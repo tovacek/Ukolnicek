@@ -792,7 +792,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       
       if (pointsEarned > 0) {
-          // CHANGE: Points from games go to Pet Points (Energy)
+          // Points from games go to Pet Points (Energy)
           const newPetPoints = (currentUser.petPoints || 0) + pointsEarned;
           userUpdates.petPoints = newPetPoints;
           dbUpdates.pet_points = newPetPoints;

@@ -90,7 +90,7 @@ export interface CalendarEvent {
   familyId: string;
   childId: string;
   title: string;
-  dayIndex: number; // 0=Monday ... 6=Sunday
+  dayIndex: number; // 1=Monday ... 7=Sunday
   time: string; // "14:30"
   color?: string;
 }
@@ -139,7 +139,7 @@ export interface Pet {
   childId: string;
   name: string;
   type: PetType;
-  stage: number; // Changed to number to support infinite levels, though we use Enum for milestones
+  stage: number; // Changed to number to support infinite levels
   health: number; // 0-100
   happiness: number; // 0-100
   experience: number; // 0-100 (resets on evolution)
