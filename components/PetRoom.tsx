@@ -23,7 +23,6 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
 
     // --- ASSETS CONFIG ---
     const BASE_URL = "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis";
-    
     const PET_ASSETS = {
         EGG: `${BASE_URL}/Food/Egg.png`,
         DRAGON: `${BASE_URL}/Animals/Dragon.png`,
@@ -31,30 +30,14 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         DINO: `${BASE_URL}/Animals/T-Rex.png`
     };
 
-    const ACCESSORIES = {
-        CROWN: `${BASE_URL}/Objects/Crown.png`,
-        WAND: `${BASE_URL}/Activities/Magic Wand.png`,
-        GLASSES: `${BASE_URL}/Objects/Glasses.png`,
-        SUNGLASSES: `${BASE_URL}/Objects/Sunglasses.png`,
-        HAT: `${BASE_URL}/Objects/Top Hat.png`,
-        GRADUATION_CAP: `${BASE_URL}/Objects/Graduation Cap.png`,
-        HEADPHONES: `${BASE_URL}/Objects/Headphone.png`,
-        BOW: `${BASE_URL}/Objects/Ribbon.png`,
-        MEDAL: `${BASE_URL}/Activities/1st Place Medal.png`,
-        GOGGLES: `${BASE_URL}/Objects/Goggles.png`,
-        PARTY_HAT: `${BASE_URL}/Objects/Party Popper.png`,
-        FIRE: `${BASE_URL}/Travel%20and%20places/Fire.png`,
-        SNOWFLAKE: `${BASE_URL}/Travel%20and%20places/Snowflake.png`,
-        ZZZ: `${BASE_URL}/Smilies/Zzz.png`,
-        SPARKLES: `${BASE_URL}/Activities/Sparkles.png`,
-        STAR: `${BASE_URL}/Travel%20and%20places/Star.png`,
-        GHOST: `${BASE_URL}/Smilies/Ghost.png`,
-        TROPHY: `${BASE_URL}/Activities/Trophy.png`
-    };
-
     const INTERACTION_ASSETS = {
         FOOD: [`${BASE_URL}/Food/Red Apple.png`, `${BASE_URL}/Food/Hamburger.png`, `${BASE_URL}/Food/Birthday Cake.png`, `${BASE_URL}/Food/Pizza.png`, `${BASE_URL}/Food/Sushi.png`],
         TOY: [`${BASE_URL}/Activities/Tennis Ball.png`, `${BASE_URL}/Activities/Kite.png`, `${BASE_URL}/Activities/Joystick.png`, `${BASE_URL}/Activities/Soccer Ball.png`, `${BASE_URL}/Activities/Trophy.png`]
+    };
+
+    const ACCESSORIES = {
+        ZZZ: `${BASE_URL}/Smilies/Zzz.png`,
+        SPARKLES: `${BASE_URL}/Activities/Sparkles.png`
     };
 
     useEffect(() => {
@@ -151,110 +134,167 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         setTimeout(() => setFloatingItem(null), 1000);
     };
 
-    const getPetImageSrc = (pet: Pet) => {
-        if (pet.stage === 1) return PET_ASSETS.EGG;
-        switch (pet.type) {
-            case PetType.DRAGON: return PET_ASSETS.DRAGON;
-            case PetType.UNICORN: return PET_ASSETS.UNICORN;
-            case PetType.DINO: return PET_ASSETS.DINO;
-            default: return PET_ASSETS.EGG;
+    // --- PROCEDURAL VECTOR PET ENGINE ---
+    
+    // Calculates SVG paths and properties based on Pet Stage
+    const getVectorPetProps = (stage: number) => {
+        const level = stage;
+        
+        // 1. Color (HUE CYCLES)
+        const baseHue = (stage * 15) % 360;
+        const colorPrimary = `hsl(${baseHue}, 70%, 50%)`;
+        const colorSecondary = `hsl(${baseHue}, 70%, 40%)`;
+        const colorBelly = `hsl(${baseHue}, 80%, 80%)`;
+
+        // 2. Shape Morphing Logic
+        
+        // EGG PHASE (1)
+        if (level === 1) {
+            return {
+                title: "Vajíčko",
+                bgClass: "from-blue-100 to-blue-200",
+                svg: (
+                    <svg viewBox="0 0 200 200" className="w-48 h-48 drop-shadow-xl">
+                        <ellipse cx="100" cy="120" rx="60" ry="70" fill={colorPrimary} />
+                        <ellipse cx="100" cy="120" rx="40" ry="50" fill={colorBelly} opacity="0.3" />
+                        {/* Cracks */}
+                        <path d="M80 80 L90 90 L85 100" stroke="rgba(0,0,0,0.2)" strokeWidth="3" fill="none"/>
+                    </svg>
+                )
+            };
         }
-    };
 
-    // --- NEW DYNAMIC APPEARANCE SYSTEM ---
-    const getPetAppearance = (stage: number) => {
-        // 1. PHASE DETERMINATION
-        let phase: 'EGG' | 'BABY' | 'TEEN' | 'ADULT' | 'MYTHIC' = 'EGG';
-        if (stage >= 2 && stage < 10) phase = 'BABY';
-        else if (stage >= 10 && stage < 20) phase = 'TEEN';
-        else if (stage >= 20 && stage < 30) phase = 'ADULT';
-        else if (stage >= 30) phase = 'MYTHIC';
+        // BABY PHASE (2-9)
+        if (level < 10) {
+            // Grows slightly fatter each level
+            const fatness = 60 + (level * 2);
+            return {
+                title: "Miminko",
+                bgClass: "from-green-200 to-emerald-400",
+                svg: (
+                    <svg viewBox="0 0 200 200" className="w-48 h-48 drop-shadow-xl animate-bounce-slow">
+                        {/* Feet */}
+                        <circle cx="70" cy="160" r="15" fill={colorSecondary} />
+                        <circle cx="130" cy="160" r="15" fill={colorSecondary} />
+                        {/* Body - Round Blob */}
+                        <path d={`M${100-fatness} 150 Q${100-fatness} 50 100 50 Q${100+fatness} 50 ${100+fatness} 150 Z`} fill={colorPrimary} />
+                        <ellipse cx="100" cy="120" rx={fatness * 0.6} ry="40" fill={colorBelly} />
+                        {/* Simple Eyes */}
+                        <circle cx="80" cy="90" r="8" fill="white" />
+                        <circle cx="80" cy="90" r="3" fill="black" />
+                        <circle cx="120" cy="90" r="8" fill="white" />
+                        <circle cx="120" cy="90" r="3" fill="black" />
+                        {/* Smile */}
+                        <path d="M90 110 Q100 120 110 110" stroke="black" strokeWidth="3" fill="none" strokeLinecap="round" />
+                    </svg>
+                )
+            };
+        }
 
-        // 2. PROCEDURAL COLORS (Rainbow Cycle)
-        const hueRotate = (stage * 15) % 360;
-        const filter = `hue-rotate(${hueRotate}deg) saturate(${1 + stage * 0.01})`;
+        // TEEN PHASE (10-19)
+        if (level < 20) {
+            // Elongates each level
+            const height = 150 - (level - 10) * 3; 
+            return {
+                title: "Teenager",
+                bgClass: "from-purple-300 to-indigo-500",
+                svg: (
+                    <svg viewBox="0 0 200 200" className="w-56 h-56 drop-shadow-2xl animate-float-medium">
+                        {/* Arms */}
+                        <path d="M60 100 Q40 120 50 140" stroke={colorSecondary} strokeWidth="12" strokeLinecap="round" fill="none"/>
+                        <path d="M140 100 Q160 120 150 140" stroke={colorSecondary} strokeWidth="12" strokeLinecap="round" fill="none"/>
+                        {/* Legs */}
+                        <path d="M80 150 L80 180" stroke={colorSecondary} strokeWidth="15" strokeLinecap="round" />
+                        <path d="M120 150 L120 180" stroke={colorSecondary} strokeWidth="15" strokeLinecap="round" />
+                        {/* Body - Oval/Tall */}
+                        <ellipse cx="100" cy="100" rx="50" ry="70" fill={colorPrimary} />
+                        <ellipse cx="100" cy="100" rx="30" ry="50" fill={colorBelly} />
+                        {/* Eyes with Glasses maybe? or just bigger */}
+                        <circle cx="85" cy="80" r="10" fill="white" />
+                        <circle cx="85" cy="80" r="4" fill="black" />
+                        <circle cx="115" cy="80" r="10" fill="white" />
+                        <circle cx="115" cy="80" r="4" fill="black" />
+                        {/* Cool Smile */}
+                        <path d="M90 120 Q100 120 110 115" stroke="black" strokeWidth="3" fill="none" strokeLinecap="round" />
+                        {/* Hair Spikes */}
+                        <path d="M80 40 L90 10 L100 40 L110 10 L120 40" fill={colorSecondary} />
+                    </svg>
+                )
+            };
+        }
 
-        // 3. ACCESSORIES & STYLING
-        const props = {
-            scale: 1,
-            floatAnimation: 'animate-float-slow', // Default floating
-            headAccessory: null as string | null,
-            faceAccessory: null as string | null,
-            handAccessory: null as string | null,
-            aura: null as string | null,
-            bgClass: 'from-sky-300 to-blue-500',
-            floorClass: 'bg-black/20',
-            title: 'Vajíčko'
+        // ADULT PHASE (20-29)
+        if (level < 30) {
+            // Shoulders broaden
+            const width = 60 + (level - 20) * 2;
+            return {
+                title: "Dospělý",
+                bgClass: "from-orange-300 to-red-500",
+                svg: (
+                    <svg viewBox="0 0 200 200" className="w-64 h-64 drop-shadow-2xl animate-float-slow">
+                        {/* Tail */}
+                        <path d="M60 150 Q20 180 40 120" stroke={colorSecondary} strokeWidth="15" strokeLinecap="round" fill="none"/>
+                        {/* Body - Trapezoidish */}
+                        <path d={`M${100-width} 80 L${100+width} 80 L140 160 L60 160 Z`} fill={colorPrimary} stroke={colorSecondary} strokeWidth="2" strokeLinejoin="round" />
+                        <path d={`M${100-width+10} 80 L${100+width-10} 80 L130 160 L70 160 Z`} fill={colorBelly} opacity="0.5" />
+                        {/* Head */}
+                        <circle cx="100" cy="60" r="40" fill={colorPrimary} />
+                        {/* Eyes - Angry/Determined */}
+                        <path d="M80 50 L95 60" stroke="black" strokeWidth="3" strokeLinecap="round"/>
+                        <path d="M120 50 L105 60" stroke="black" strokeWidth="3" strokeLinecap="round"/>
+                        <circle cx="90" cy="65" r="5" fill="black" />
+                        <circle cx="110" cy="65" r="5" fill="black" />
+                        {/* Arms with muscles */}
+                        <path d={`M${100-width} 90 Q${60-width} 120 ${80-width} 140`} stroke={colorSecondary} strokeWidth="18" strokeLinecap="round" fill="none"/>
+                        <path d={`M${100+width} 90 Q${140+width} 120 ${120+width} 140`} stroke={colorSecondary} strokeWidth="18" strokeLinecap="round" fill="none"/>
+                    </svg>
+                )
+            };
+        }
+
+        // MYTHIC PHASE (30+)
+        // Complex shape with wings
+        return {
+            title: "Legenda",
+            bgClass: "from-slate-900 via-purple-900 to-black",
+            svg: (
+                <svg viewBox="0 0 300 300" className="w-80 h-80 drop-shadow-[0_0_30px_rgba(255,255,255,0.5)] animate-float-fast">
+                    <defs>
+                        <linearGradient id="wingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stopColor={colorSecondary} stopOpacity="0.8"/>
+                            <stop offset="100%" stopColor="transparent" stopOpacity="0"/>
+                        </linearGradient>
+                    </defs>
+                    {/* Aura */}
+                    <circle cx="150" cy="150" r="120" fill="none" stroke={colorSecondary} strokeWidth="2" strokeDasharray="10 5" className="animate-spin-slow opacity-50"/>
+                    
+                    {/* Wings (Grow with level) */}
+                    <path d="M100 120 Q50 50 20 80 Q50 150 100 160" fill="url(#wingGrad)" />
+                    <path d="M200 120 Q250 50 280 80 Q250 150 200 160" fill="url(#wingGrad)" />
+
+                    {/* Main Body - Complex */}
+                    <path d="M150 60 L190 100 L180 200 L120 200 L110 100 Z" fill={colorPrimary} />
+                    <circle cx="150" cy="150" r="30" fill={colorBelly} className="animate-pulse" />
+                    
+                    {/* Horns */}
+                    <path d="M130 60 L120 20 L140 50" fill="gold" />
+                    <path d="M170 60 L180 20 L160 50" fill="gold" />
+
+                    {/* Glowing Eyes */}
+                    <ellipse cx="140" cy="90" rx="8" ry="12" fill="white" className="animate-pulse" />
+                    <ellipse cx="160" cy="90" rx="8" ry="12" fill="white" className="animate-pulse" />
+                </svg>
+            )
         };
-
-        // Size Growth
-        props.scale = Math.min(2.5, 0.8 + (stage * 0.04));
-
-        switch (phase) {
-            case 'EGG':
-                props.title = "Vajíčko";
-                props.floatAnimation = 'animate-pulse-slow';
-                props.bgClass = 'from-blue-100 to-blue-300';
-                break;
-            case 'BABY':
-                props.title = "Miminko";
-                props.floatAnimation = 'animate-bounce-slow'; // Babies bounce/hop
-                props.bgClass = 'from-green-300 to-emerald-500';
-                props.floorClass = 'bg-emerald-800/30';
-                // Unlockables
-                if (stage >= 3) props.headAccessory = ACCESSORIES.BOW;
-                if (stage >= 5) props.headAccessory = ACCESSORIES.PARTY_HAT;
-                if (stage >= 8) props.faceAccessory = ACCESSORIES.GLASSES;
-                break;
-            case 'TEEN':
-                props.title = "Teenager";
-                props.floatAnimation = 'animate-float-medium'; // Teens bob to music
-                props.bgClass = 'from-purple-400 to-indigo-600';
-                props.floorClass = 'bg-indigo-900/30';
-                // Unlockables
-                props.headAccessory = ACCESSORIES.HEADPHONES; // Always headphones for teens
-                if (stage >= 13) props.faceAccessory = ACCESSORIES.SUNGLASSES;
-                if (stage >= 16) props.handAccessory = ACCESSORIES.MEDAL;
-                break;
-            case 'ADULT':
-                props.title = "Dospělý";
-                props.floatAnimation = 'animate-float-slow'; // Adults hover majestically
-                props.bgClass = 'from-orange-400 to-red-600';
-                props.floorClass = 'bg-red-900/30';
-                // Unlockables
-                props.headAccessory = ACCESSORIES.HAT;
-                if (stage >= 23) props.headAccessory = ACCESSORIES.GRADUATION_CAP;
-                if (stage >= 26) props.headAccessory = ACCESSORIES.CROWN;
-                props.handAccessory = ACCESSORIES.WAND;
-                break;
-            case 'MYTHIC':
-                props.title = "Legenda";
-                props.floatAnimation = 'animate-float-fast'; // Mythics vibrate with power
-                props.bgClass = 'from-slate-900 via-purple-900 to-black';
-                props.floorClass = 'bg-purple-500/20';
-                // Unlockables
-                props.headAccessory = ACCESSORIES.CROWN;
-                props.faceAccessory = ACCESSORIES.GOGGLES;
-                props.handAccessory = ACCESSORIES.TROPHY;
-                props.aura = ACCESSORIES.SPARKLES;
-                break;
-        }
-
-        if (isNight) {
-            props.bgClass = 'from-slate-900 to-black';
-            props.floatAnimation = 'animate-pulse-slow'; // Sleep breathing
-        }
-
-        return { filter, ...props };
     };
 
-    const app = myPet ? getPetAppearance(myPet.stage) : getPetAppearance(1);
+    const petVisuals = myPet ? getVectorPetProps(myPet.stage) : getVectorPetProps(1);
 
     // Dynamic transform for interactions
     const getInteractionTransform = () => {
-        let transform = `scale(${app.scale})`;
+        let transform = `scale(1)`;
         if (animationState === 'EATING') transform += ' scale(1.1) rotate(-5deg)';
-        if (animationState === 'PLAYING') transform += ' scale(1.1) rotate(10deg)'; // Just tilt, no crazy zoom
+        if (animationState === 'PLAYING') transform += ' scale(1.1) rotate(10deg)';
         if (animationState === 'PETTING') transform += ' scale(1.05) rotate(5deg)';
         return transform;
     };
@@ -263,7 +303,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
-            <div className={`w-full max-w-lg rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col h-[90vh] border-[6px] border-white/20 transition-all duration-1000 bg-gradient-to-b ${app.bgClass}`}>
+            <div className={`w-full max-w-lg rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col h-[90vh] border-[6px] border-white/20 transition-all duration-1000 bg-gradient-to-b ${petVisuals.bgClass}`}>
                 
                 {/* Dynamic Background Elements */}
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -294,7 +334,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                         <div className="absolute top-0 left-0 w-full p-6 pt-8 z-30 flex justify-between items-start">
                             <div>
                                 <h3 className="text-3xl font-display font-bold text-white drop-shadow-md flex items-center gap-2">{myPet.name} {isNight && <Moon size={20} className="text-blue-200 fill-blue-200 animate-pulse"/>}</h3>
-                                <span className="bg-white/20 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full border border-white/10 uppercase tracking-wider shadow-sm block w-fit mt-1">Lvl {myPet.stage} • {app.title}</span>
+                                <span className="bg-white/20 backdrop-blur-md text-white text-xs font-bold px-3 py-1 rounded-full border border-white/10 uppercase tracking-wider shadow-sm block w-fit mt-1">Lvl {myPet.stage} • {petVisuals.title}</span>
                             </div>
                             <div className="bg-black/30 backdrop-blur-md p-3 rounded-2xl border border-white/10 flex flex-col gap-2 w-32 shadow-lg">
                                 {[{icon:Heart, color:'red', val:myPet.health, label:'Zdraví'}, {icon:Smile, color:'yellow', val:myPet.happiness, label:'Štěstí'}, {icon:Zap, color:'blue', val:myPet.experience % 100, label:'XP'}].map((s, i) => (
@@ -312,32 +352,13 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                             {/* The Living Pet Container */}
                             <div 
                                 onClick={handlePet}
-                                className={`relative cursor-pointer select-none transition-transform duration-500 ${isNight ? 'animate-pulse-slow' : app.floatAnimation}`}
+                                className={`relative cursor-pointer select-none transition-transform duration-500 ${isNight ? 'animate-pulse-slow' : ''}`}
                                 style={{ transform: getInteractionTransform() }}
                             >
-                                {/* Layer 1: Aura/Particles Behind */}
-                                {app.aura && <img src={app.aura} className="absolute -top-10 -left-10 w-[140%] h-[140%] z-0 opacity-60 animate-spin-slow pointer-events-none" alt="Aura" />}
-                                
-                                {/* Layer 2: Main Body (Filtered) */}
-                                <img 
-                                    src={getPetImageSrc(myPet)} 
-                                    alt="Pet" 
-                                    className="object-contain relative z-10 w-48 h-48 drop-shadow-2xl" 
-                                    style={{ filter: app.filter }} 
-                                />
+                                {/* Vector SVG Pet */}
+                                {petVisuals.svg}
 
-                                {/* Layer 3: Accessories (Absolute positioned relative to pet) */}
-                                {app.headAccessory && (
-                                    <img src={app.headAccessory} className="absolute -top-12 left-1/2 -translate-x-1/2 w-24 h-24 z-20 drop-shadow-lg pointer-events-none" alt="Hat" />
-                                )}
-                                {app.faceAccessory && (
-                                    <img src={app.faceAccessory} className="absolute top-10 left-1/2 -translate-x-1/2 w-20 h-20 z-20 drop-shadow-md pointer-events-none" alt="Glasses" />
-                                )}
-                                {app.handAccessory && (
-                                    <img src={app.handAccessory} className="absolute bottom-0 -right-8 w-16 h-16 z-20 drop-shadow-md animate-bounce-slow pointer-events-none" alt="Hand Item" />
-                                )}
-
-                                {/* Layer 4: Status Effects */}
+                                {/* Status Effects */}
                                 {isNight && <img src={ACCESSORIES.ZZZ} className="absolute -top-6 right-0 w-12 h-12 z-30 animate-bounce" alt="Zzz" />}
                                 {floatingItem && (
                                     <div className={`absolute z-50 left-1/2 -translate-x-1/2 ${floatingItem.type === 'food' ? 'animate-feed-item' : floatingItem.type === 'toy' ? 'animate-play-item' : 'animate-love-item'}`}>
@@ -354,7 +375,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                             </div>
 
                             {/* Floor/Shadow */}
-                            <div className={`absolute bottom-24 w-64 h-16 blur-2xl rounded-[100%] transform rotate-x-[60deg] z-0 ${app.floorClass} transition-colors duration-1000`}></div>
+                            <div className={`absolute bottom-24 w-64 h-16 blur-2xl rounded-[100%] transform rotate-x-[60deg] z-0 bg-black/20 transition-colors duration-1000`}></div>
                         </div>
 
                         {/* Controls */}
