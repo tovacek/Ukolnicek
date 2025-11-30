@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { TaskStatus, Task, UserRole, Goal, PetType } from '../types';
-import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2, Egg, Heart, Smile, Zap } from 'lucide-react';
+import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2, Egg, Heart, Smile, Zap, ArrowRight } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 import AvatarDisplay from './AvatarDisplay';
 import ImageUploader from './ImageUploader';
@@ -107,14 +107,26 @@ const ChildDashboard: React.FC = () => {
       }
   };
   
-  // Today's Calendar Events
-  const currentDayIndex = new Date().getDay() || 7; // 1-7
+  // Calendar Events: Today and Tomorrow
+  const now = new Date();
+  const currentDayIndex = now.getDay() || 7; // 1-7
   
-  const todaysEvents = currentUser ? calendarEvents.filter(e => {
-      if (e.childId !== currentUser.id) return false;
-      // Match recurring day OR specific date
-      return (e.isRecurring && e.dayIndex === currentDayIndex) || (!e.isRecurring && e.specificDate === todayStr);
-  }).sort((a,b) => a.time.localeCompare(b.time)) : [];
+  // Calculate tomorrow
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  const tomorrowDayIndex = tomorrow.getDay() || 7;
+
+  const getEventsForDate = (dStr: string, dIndex: number) => {
+        return currentUser ? calendarEvents.filter(e => {
+        if (e.childId !== currentUser.id) return false;
+        // Match recurring day OR specific date
+        return (e.isRecurring && e.dayIndex === dIndex) || (!e.isRecurring && e.specificDate === dStr);
+    }).sort((a,b) => a.time.localeCompare(b.time)) : [];
+  };
+
+  const todaysEvents = getEventsForDate(todayStr, currentDayIndex);
+  const tomorrowsEvents = getEventsForDate(tomorrowStr, tomorrowDayIndex);
 
   useEffect(() => {
     const checkReward = async () => {
@@ -461,29 +473,49 @@ const ChildDashboard: React.FC = () => {
 
       {/* Activities Grid */}
       <div className="px-4 mb-6 grid grid-cols-2 gap-4">
-        {/* Schedule Card */}
+        {/* Schedule Card - UPDATED to show Today AND Tomorrow */}
         <button 
             onClick={() => setShowSchedule(true)}
             className="col-span-2 bg-gradient-to-r from-teal-400 to-teal-600 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden flex flex-row items-center justify-between"
         >
-            <div className="relative z-10 text-left">
-                <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Calendar size={18}/> Můj Rozvrh</h3>
-                {todaysEvents.length > 0 ? (
-                    <div className="flex flex-col gap-1">
-                         <p className="text-teal-100 text-[10px] font-bold uppercase">Dnes:</p>
-                         {todaysEvents.slice(0, 2).map((e, idx) => (
-                             <div key={idx} className="flex items-center gap-2 text-xs">
-                                 <span className="font-bold bg-white/20 px-1.5 rounded text-[10px]">{e.time}</span>
-                                 <span className="truncate max-w-[120px]">{e.title}</span>
-                             </div>
-                         ))}
-                         {todaysEvents.length > 2 && <span className="text-[10px] opacity-80">a další...</span>}
-                    </div>
+            <div className="relative z-10 text-left w-full pr-12">
+                <h3 className="font-bold font-display flex items-center gap-1 mb-2"><Calendar size={18}/> Můj Rozvrh</h3>
+                
+                {todaysEvents.length === 0 && tomorrowsEvents.length === 0 ? (
+                    <p className="text-teal-100 text-xs">Žádné plány na nejbližší dny.</p>
                 ) : (
-                    <p className="text-teal-100 text-xs">Žádné kroužky na dnešek.</p>
+                    <div className="flex flex-col gap-2">
+                        {/* Today's Events */}
+                        {todaysEvents.length > 0 && (
+                            <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm">
+                                <p className="text-teal-50 text-[10px] font-bold uppercase mb-1 flex items-center gap-1"><Sun size={10}/> Dnes</p>
+                                {todaysEvents.slice(0, 2).map((e, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 text-xs mb-0.5">
+                                        <span className="font-bold bg-white/20 px-1.5 rounded text-[10px] min-w-[35px] text-center">{e.time}</span>
+                                        <span className="truncate">{e.title}</span>
+                                    </div>
+                                ))}
+                                {todaysEvents.length > 2 && <span className="text-[9px] opacity-80 pl-1">+ další...</span>}
+                            </div>
+                        )}
+
+                        {/* Tomorrow's Events */}
+                        {tomorrowsEvents.length > 0 && (
+                            <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm">
+                                <p className="text-teal-50 text-[10px] font-bold uppercase mb-1 flex items-center gap-1"><ArrowRight size={10}/> Zítra</p>
+                                {tomorrowsEvents.slice(0, 2).map((e, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 text-xs mb-0.5">
+                                        <span className="font-bold bg-white/20 px-1.5 rounded text-[10px] min-w-[35px] text-center">{e.time}</span>
+                                        <span className="truncate">{e.title}</span>
+                                    </div>
+                                ))}
+                                {tomorrowsEvents.length > 2 && <span className="text-[9px] opacity-80 pl-1">+ další...</span>}
+                            </div>
+                        )}
+                    </div>
                 )}
             </div>
-            <div className="bg-white/20 p-3 rounded-full backdrop-blur-sm">
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 p-3 rounded-full backdrop-blur-sm">
                 <Calendar size={32} />
             </div>
         </button>
