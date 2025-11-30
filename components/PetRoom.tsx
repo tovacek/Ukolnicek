@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Pet, PetType } from '../types';
-import { X, Heart, Zap, Utensils, Smile, ArrowRight, Trophy, Moon, Sun, Bath, Sparkles } from 'lucide-react';
+import { X, Heart, Zap, Utensils, Smile, Trophy, Moon, Sun, Bath, Sparkles } from 'lucide-react';
 
 interface PetRoomProps {
     onClose: () => void;
@@ -133,6 +133,40 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         setAnimationState(isLightsOut ? 'IDLE' : 'SLEEPING');
     };
 
+    // --- ELEMENTAL WORLDS & SKINS ---
+    const getTheme = (type: PetType) => {
+        switch (type) {
+            case PetType.DRAGON: return {
+                device: 'bg-red-100 border-red-300',
+                screen: 'bg-gradient-to-b from-orange-900 to-red-900', // Volcano
+                accent: 'text-red-500',
+                floor: 'bg-orange-600/30',
+                particles: '🌋'
+            };
+            case PetType.UNICORN: return {
+                device: 'bg-purple-100 border-purple-300',
+                screen: 'bg-gradient-to-b from-indigo-300 via-purple-300 to-pink-200', // Sky Kingdom
+                accent: 'text-purple-500',
+                floor: 'bg-white/40',
+                particles: '✨'
+            };
+            case PetType.DINO: return {
+                device: 'bg-green-100 border-green-300',
+                screen: 'bg-gradient-to-b from-emerald-800 to-green-600', // Jungle
+                accent: 'text-green-500',
+                floor: 'bg-emerald-900/40',
+                particles: '🍃'
+            };
+            default: return {
+                device: 'bg-slate-200 border-slate-300',
+                screen: 'bg-gradient-to-b from-blue-200 to-white',
+                accent: 'text-slate-500',
+                floor: 'bg-green-600/20',
+                particles: ''
+            };
+        }
+    };
+
     // --- RENDERERS ---
 
     const renderMicroPet = (stage: number, type: PetType) => {
@@ -142,17 +176,17 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         let accentColor = '#FEF08A';
 
         if (type === PetType.DRAGON) {
-            mainColor = '#F87171'; // Red
-            secondColor = '#991B1B';
+            mainColor = '#EF4444'; // Red
+            secondColor = '#7F1D1D';
             accentColor = '#FDBA74';
         } else if (type === PetType.UNICORN) {
-            mainColor = '#C084FC'; // Purple
+            mainColor = '#D8B4FE'; // Purple
             secondColor = '#6B21A8';
             accentColor = '#F472B6';
         }
 
         // Color shift by level (Rainbow evolution)
-        const hueShift = (stage * 10) % 360;
+        const hueShift = (stage * 5) % 360;
         
         // EGG
         if (stage === 1) {
@@ -184,7 +218,14 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                     {/* Cheeks */}
                     <circle cx="35" cy="62" r="3" fill="#FCA5A5" opacity="0.6"/>
                     <circle cx="65" cy="62" r="3" fill="#FCA5A5" opacity="0.6"/>
-                    {/* Accessories */}
+                    
+                    {/* ACCESSORIES (Layered) */}
+                    {stage >= 5 && (
+                        // Cap
+                        <path d="M30 40 Q50 20 70 40 L70 45 Q50 25 30 45 Z" fill="#3B82F6" stroke="black" strokeWidth="1"/> 
+                    )}
+                    
+                    {/* Type Specifics */}
                     {type === PetType.UNICORN && <path d="M50 30 L45 45 L55 45 Z" fill="#FDE047" stroke="black" strokeWidth="1"/>}
                     {type === PetType.DRAGON && <path d="M20 50 Q10 30 30 40" stroke={secondColor} strokeWidth="3" fill="none"/>}
                     {type === PetType.DINO && <path d="M50 30 L45 35 L50 40 L55 35 Z" fill={secondColor} />}
@@ -195,45 +236,60 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         // ADULT (Complex)
         return (
             <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl" style={{ filter: `hue-rotate(${hueShift}deg)` }}>
+                {/* Wings (Level 20+) */}
+                {stage >= 20 && (
+                    <>
+                        <path d="M20 50 Q5 20 40 40" fill={accentColor} opacity="0.8" stroke={secondColor} strokeWidth="1"/>
+                        <path d="M80 50 Q95 20 60 40" fill={accentColor} opacity="0.8" stroke={secondColor} strokeWidth="1"/>
+                    </>
+                )}
+
                 {/* Tail */}
                 <path d="M30 80 Q10 80 20 60" stroke={mainColor} strokeWidth="8" strokeLinecap="round" fill="none"/>
+                
                 {/* Legs */}
                 <path d="M35 85 L35 95" stroke={secondColor} strokeWidth="8" strokeLinecap="round"/>
                 <path d="M65 85 L65 95" stroke={secondColor} strokeWidth="8" strokeLinecap="round"/>
+                
                 {/* Body */}
                 <rect x="30" y="40" width="40" height="50" rx="15" fill={mainColor} stroke={secondColor} strokeWidth="3"/>
                 <path d="M40 50 L60 50 L60 80 L40 80 Z" fill={accentColor} opacity="0.5" rx="5"/>
+                
                 {/* Head */}
                 <circle cx="50" cy="35" r="25" fill={mainColor} stroke={secondColor} strokeWidth="3"/>
+                
                 {/* Face */}
                 <circle cx="42" cy="32" r="4" fill="black"/>
                 <circle cx="58" cy="32" r="4" fill="black"/>
                 <path d="M48 40 Q50 43 52 40" stroke="black" strokeWidth="2" fill="none" strokeLinecap="round"/>
-                {/* Type Specifics */}
-                {type === PetType.DRAGON && (
-                    <>
-                        <path d="M75 50 Q95 30 75 70" fill={accentColor} opacity="0.8" stroke="black" strokeWidth="1"/>
-                        <path d="M25 50 Q5 30 25 70" fill={accentColor} opacity="0.8" stroke="black" strokeWidth="1"/>
-                    </>
+
+                {/* ACCESSORIES (Layered on top) */}
+                {stage >= 10 && (
+                    // Sunglasses
+                    <g>
+                        <rect x="35" y="28" width="12" height="8" fill="black" rx="2"/>
+                        <rect x="53" y="28" width="12" height="8" fill="black" rx="2"/>
+                        <line x1="47" y1="32" x2="53" y2="32" stroke="black" strokeWidth="1"/>
+                    </g>
                 )}
+                {stage >= 30 && (
+                    // Crown
+                    <path d="M35 15 L42 25 L50 10 L58 25 L65 15 L65 28 L35 28 Z" fill="#FACC15" stroke="#CA8A04" strokeWidth="1"/>
+                )}
+
+                {/* Type Specifics */}
                 {type === PetType.UNICORN && <path d="M50 10 L45 25 L55 25 Z" fill="#FDE047" stroke="black" strokeWidth="1"/>}
-                {stage >= 30 && <path d="M30 50 L10 20 L30 30" fill="gold" opacity="0.8"/>} {/* Crown/Wings */}
             </svg>
         );
     };
 
     if (!currentUser) return null;
+    const theme = myPet ? getTheme(myPet.type) : getTheme(PetType.DINO);
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
             {/* GAMEBOY DEVICE CONTAINER */}
-            <div className={`w-full max-w-sm rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative flex flex-col h-[85vh] border-8 border-b-[20px] transition-colors duration-500 overflow-hidden
-                ${!myPet ? 'bg-slate-200 border-slate-300' : 
-                  myPet.type === PetType.DRAGON ? 'bg-red-100 border-red-300' :
-                  myPet.type === PetType.UNICORN ? 'bg-purple-100 border-purple-300' :
-                  'bg-green-100 border-green-300'
-                }
-            `}>
+            <div className={`w-full max-w-sm rounded-[3rem] shadow-[0_20px_50px_rgba(0,0,0,0.5)] relative flex flex-col h-[85vh] border-8 border-b-[20px] transition-colors duration-500 overflow-hidden ${!myPet ? 'bg-slate-200 border-slate-300' : theme.device}`}>
                 <button onClick={onClose} className="absolute top-4 right-4 p-2 bg-black/10 rounded-full hover:bg-black/20 text-slate-600 z-50"><X size={20}/></button>
 
                 {(!myPet || view === 'ADOPT') ? (
@@ -253,19 +309,24 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                     <div className="flex flex-col h-full">
                         
                         {/* SCREEN */}
-                        <div className={`m-5 mb-0 flex-1 rounded-2xl border-4 border-slate-300/50 shadow-inner relative overflow-hidden transition-all duration-1000
-                            ${isLightsOut ? 'bg-slate-900' : 'bg-gradient-to-b from-blue-200 to-white'}
-                        `}>
-                            {/* Pixels / Grid Overlay */}
-                            <div className="absolute inset-0 bg-[url('https://upload.wikimedia.org/wikipedia/commons/1/12/Grid_transparent.png')] opacity-10 pointer-events-none bg-[length:20px_20px]"></div>
+                        <div className={`m-5 mb-0 flex-1 rounded-2xl border-4 border-slate-300/50 shadow-inner relative overflow-hidden transition-all duration-1000 ${isLightsOut ? 'bg-slate-900' : theme.screen}`}>
+                            
+                            {/* Elemental Particles */}
+                            {!isLightsOut && (
+                                <div className="absolute inset-0 overflow-hidden opacity-30 pointer-events-none">
+                                    <div className="absolute top-10 left-10 text-2xl animate-float-slow">{theme.particles}</div>
+                                    <div className="absolute top-40 right-20 text-xl animate-float-medium">{theme.particles}</div>
+                                    <div className="absolute bottom-20 left-1/3 text-lg animate-bounce-slow">{theme.particles}</div>
+                                </div>
+                            )}
 
                             {/* Status Bar */}
                             <div className={`absolute top-2 left-2 right-2 flex justify-between items-center bg-white/40 backdrop-blur-sm p-1.5 rounded-lg z-20 ${isLightsOut ? 'opacity-20' : ''}`}>
-                                <div className="flex items-center gap-1 font-bold text-xs text-slate-700">
+                                <div className="flex items-center gap-1 font-bold text-xs text-slate-800">
                                     <Heart size={10} className="text-red-500 fill-red-500"/> {myPet.health}%
                                 </div>
-                                <div className="font-display font-bold text-slate-800 text-sm">{myPet.name}</div>
-                                <div className="flex items-center gap-1 font-bold text-xs text-slate-700">
+                                <div className="font-display font-bold text-slate-900 text-sm">{myPet.name}</div>
+                                <div className="flex items-center gap-1 font-bold text-xs text-slate-800">
                                     <Smile size={10} className="text-yellow-500 fill-yellow-500"/> {myPet.happiness}%
                                 </div>
                             </div>
@@ -274,7 +335,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                             <div className="absolute inset-0 flex items-center justify-center">
                                 
                                 {/* Pet */}
-                                <div className={`w-40 h-40 transition-transform duration-500
+                                <div className={`w-40 h-40 transition-transform duration-500 z-10
                                     ${animationState === 'WALK' ? 'animate-bounce-slow' : ''}
                                     ${animationState === 'EATING' ? 'scale-110' : ''}
                                     ${animationState === 'SLEEPING' ? 'scale-90 opacity-80' : 'animate-float-fast'}
@@ -285,7 +346,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
 
                                 {/* Floating Action Items */}
                                 {floatingItem && (
-                                    <div className={`absolute top-1/3 left-1/2 -translate-x-1/2 animate-bounce ${floatingItem.color}`}>
+                                    <div className={`absolute top-1/3 left-1/2 -translate-x-1/2 animate-bounce ${floatingItem.color} z-20`}>
                                         {floatingItem.icon}
                                     </div>
                                 )}
@@ -300,21 +361,21 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
 
                                 {/* ZZZ for Sleep */}
                                 {isLightsOut && (
-                                    <div className="absolute top-20 right-10 text-slate-200 animate-pulse text-2xl font-bold">Zzz...</div>
+                                    <div className="absolute top-20 right-10 text-slate-200 animate-pulse text-2xl font-bold z-20">Zzz...</div>
                                 )}
 
                                 {/* Poop Mess */}
                                 {poopCount > 0 && !isLightsOut && (
-                                    <div className="absolute bottom-4 right-10 text-2xl animate-bounce">💩</div>
+                                    <div className="absolute bottom-4 right-10 text-2xl animate-bounce z-10">💩</div>
                                 )}
                                 {poopCount > 1 && !isLightsOut && (
-                                    <div className="absolute bottom-4 left-10 text-2xl animate-bounce delay-100">💩</div>
+                                    <div className="absolute bottom-4 left-10 text-2xl animate-bounce delay-100 z-10">💩</div>
                                 )}
 
                             </div>
                             
                             {/* Floor */}
-                            <div className={`absolute bottom-0 w-full h-8 ${isLightsOut ? 'bg-slate-800' : 'bg-green-600/20'}`}></div>
+                            <div className={`absolute bottom-0 w-full h-12 ${isLightsOut ? 'bg-slate-800' : theme.floor}`}></div>
                         </div>
 
                         {/* CONTROLS */}
@@ -370,11 +431,11 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                             </div>
                             
                             <div className="mt-4 flex justify-between items-center px-2">
-                                <div className="text-xs font-bold text-slate-400 bg-white/50 px-2 py-1 rounded-md">
+                                <div className="text-xs font-bold text-slate-500 bg-white/50 px-2 py-1 rounded-md border border-white/50">
                                     Lvl {myPet.stage}
                                 </div>
-                                <div className="flex items-center gap-1 bg-white/50 px-2 py-1 rounded-md">
-                                    <Zap size={10} className="text-cyan-500 fill-cyan-500"/>
+                                <div className="flex items-center gap-1 bg-white/50 px-2 py-1 rounded-md border border-white/50">
+                                    <Zap size={10} className="text-cyan-600 fill-cyan-600"/>
                                     <span className="text-xs font-bold text-slate-600">{currentUser.petPoints}</span>
                                 </div>
                             </div>
@@ -389,6 +450,12 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                 
                 @keyframes float-fast { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(2px, -2px); } 50% { transform: translate(-2px, 2px); } 75% { transform: translate(2px, 2px); } }
                 .animate-float-fast { animation: float-fast 0.5s linear infinite; }
+
+                @keyframes float-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+                .animate-float-slow { animation: float-slow 4s ease-in-out infinite; }
+                
+                @keyframes float-medium { 0%, 100% { transform: translateY(0) rotate(5deg); } 50% { transform: translateY(-15px) rotate(-5deg); } }
+                .animate-float-medium { animation: float-medium 3s ease-in-out infinite; }
             `}</style>
         </div>
     );
