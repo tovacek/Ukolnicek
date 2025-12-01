@@ -24,20 +24,35 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
     const myPet = currentUser ? pets.find(p => p.childId === currentUser.id) : null;
     const chatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+    // --- ASSETS CONFIG ---
+    const BASE_URL = "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis";
+    
+    const PET_ASSETS = {
+        EGG: `${BASE_URL}/Food/Egg.png`,
+        DRAGON: `${BASE_URL}/Animals/Dragon.png`,
+        UNICORN: `${BASE_URL}/Animals/Unicorn.png`,
+        DINO: `${BASE_URL}/Animals/T-Rex.png`
+    };
+
+    const ACCESSORIES = {
+        CROWN: `${BASE_URL}/Objects/Crown.png`,
+        GLASSES: `${BASE_URL}/Objects/Glasses.png`,
+        HAT: `${BASE_URL}/Objects/Top Hat.png`,
+        ZZZ: `${BASE_URL}/Smilies/Zzz.png`,
+        SPARKLES: `${BASE_URL}/Activities/Sparkles.png`
+    };
+
     // Initial Setup
     useEffect(() => {
         if (!myPet) setView('ADOPT');
         
-        // Auto-detect night time for initial state
         const hour = new Date().getHours();
         if (hour >= 21 || hour < 7) setIsLightsOut(true);
 
-        // Randomly generate "mess" based on low hygiene (simulated by inverse happiness)
         if (myPet && myPet.happiness < 50) {
             setPoopCount(Math.floor(Math.random() * 2) + 1);
         }
 
-        // Random idle chatter
         chatTimerRef.current = setInterval(() => {
             if (Math.random() > 0.7 && myPet && !isLightsOut) generateRandomChat();
         }, 6000);
@@ -55,12 +70,11 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         if (myPet.happiness < 30) { setChatBubble("Nuda... 🥱"); return; }
 
         const phrases = [
-            "Jsi super! ❤️",
-            "Hrajeme? 🎾",
-            `Lvl ${myPet.stage} 🚀`,
-            "Sleduj! 👀",
-            "Energie! ⚡",
-            "Mám tě rád! 🥰"
+            `Lvl ${myPet.stage} je super! 🚀`,
+            "Sleduj mě! 👀",
+            "Mám plno energie! ⚡",
+            "Jsi můj nejlepší kámoš ❤️",
+            "Co budeme dělat? 🤔"
         ];
         setChatBubble(phrases[Math.floor(Math.random() * phrases.length)]);
         setTimeout(() => setChatBubble(null), 3000);
@@ -90,7 +104,6 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         const res = await feedPet(myPet.id);
         if (res.success) {
              setChatBubble("Mňam! 😋");
-             // Chance to poop after eating
              if (Math.random() > 0.8) setTimeout(() => setPoopCount(prev => prev + 1), 3000);
         } else {
              setMessage(res.message);
@@ -123,7 +136,6 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
             setPoopCount(0);
             setAnimationState('IDLE');
             setChatBubble("Čisto! ✨");
-            // Small bonus interaction (using playWithPet for backend simplicity)
             playWithPet(myPet.id); 
         }, 2000);
     };
@@ -133,158 +145,81 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
         setAnimationState(isLightsOut ? 'IDLE' : 'SLEEPING');
     };
 
-    // --- ELEMENTAL WORLDS & SKINS ---
+    // --- PROCEDURAL EVOLUTION ENGINE ---
+    // Calculates visual properties based on level to ensure distinct look every stage
+    const getPetVisuals = (stage: number, type: PetType) => {
+        // 1. Color Shift (Hue Rotation)
+        // Every level shifts hue by 15 degrees. 
+        // Lvl 1: Normal, Lvl 10: Green-ish, Lvl 20: Blue-ish
+        const hue = (stage * 15) % 360;
+        const filter = `hue-rotate(${hue}deg)`;
+
+        // 2. Shape Morphing (Scale X/Y)
+        // Lvl 2-9: Baby (Fat/Short)
+        // Lvl 10-19: Teen (Thin/Tall)
+        // Lvl 20+: Adult (Normal/Large)
+        // Lvl 30+: Mythic (Wide/Strong)
+        let scaleX = 1;
+        let scaleY = 1;
+        
+        if (stage >= 2 && stage < 10) { scaleX = 1.15; scaleY = 0.9; } // Baby
+        else if (stage >= 10 && stage < 20) { scaleX = 0.9; scaleY = 1.1; } // Teen
+        else if (stage >= 30) { scaleX = 1.2; scaleY = 1.1; } // Mythic
+
+        // 3. Continuous Growth
+        const baseSize = Math.min(2.0, 0.8 + (stage * 0.05)); // Grows 5% every level
+        const transform = `scale(${baseSize}) scaleX(${scaleX}) scaleY(${scaleY})`;
+
+        // 4. Source Image
+        let src = PET_ASSETS.EGG;
+        if (stage > 1) {
+            switch(type) {
+                case PetType.DRAGON: src = PET_ASSETS.DRAGON; break;
+                case PetType.UNICORN: src = PET_ASSETS.UNICORN; break;
+                case PetType.DINO: src = PET_ASSETS.DINO; break;
+            }
+        }
+
+        // 5. Titles
+        const titles = ["Vajíčko", "Miminko", "Batole", "Rošťák", "Průzkumník", "Teenager", "Rebel", "Bojovník", "Dospělý", "Mistr", "Legenda", "Titán", "Mytický", "Božský"];
+        const titleIndex = Math.min(titles.length - 1, Math.floor((stage - 1) / 3));
+
+        return { src, filter, transform, title: titles[titleIndex] };
+    };
+
+    // --- ELEMENTAL THEMES ---
     const getTheme = (type: PetType) => {
         switch (type) {
             case PetType.DRAGON: return {
                 device: 'bg-red-100 border-red-300',
-                screen: 'bg-gradient-to-b from-orange-900 to-red-900', // Volcano
-                accent: 'text-red-500',
+                screen: 'bg-gradient-to-b from-orange-900 to-red-900',
                 floor: 'bg-orange-600/30',
                 particles: '🌋'
             };
             case PetType.UNICORN: return {
                 device: 'bg-purple-100 border-purple-300',
-                screen: 'bg-gradient-to-b from-indigo-300 via-purple-300 to-pink-200', // Sky Kingdom
-                accent: 'text-purple-500',
+                screen: 'bg-gradient-to-b from-indigo-300 via-purple-300 to-pink-200',
                 floor: 'bg-white/40',
                 particles: '✨'
             };
             case PetType.DINO: return {
                 device: 'bg-green-100 border-green-300',
-                screen: 'bg-gradient-to-b from-emerald-800 to-green-600', // Jungle
-                accent: 'text-green-500',
+                screen: 'bg-gradient-to-b from-emerald-800 to-green-600',
                 floor: 'bg-emerald-900/40',
                 particles: '🍃'
             };
             default: return {
                 device: 'bg-slate-200 border-slate-300',
                 screen: 'bg-gradient-to-b from-blue-200 to-white',
-                accent: 'text-slate-500',
                 floor: 'bg-green-600/20',
                 particles: ''
             };
         }
     };
 
-    // --- RENDERERS ---
-
-    const renderMicroPet = (stage: number, type: PetType) => {
-        // Base Colors based on Type
-        let mainColor = '#4ADE80'; // Dino Green
-        let secondColor = '#166534';
-        let accentColor = '#FEF08A';
-
-        if (type === PetType.DRAGON) {
-            mainColor = '#EF4444'; // Red
-            secondColor = '#7F1D1D';
-            accentColor = '#FDBA74';
-        } else if (type === PetType.UNICORN) {
-            mainColor = '#D8B4FE'; // Purple
-            secondColor = '#6B21A8';
-            accentColor = '#F472B6';
-        }
-
-        // Color shift by level (Rainbow evolution)
-        const hueShift = (stage * 5) % 360;
-        
-        // EGG
-        if (stage === 1) {
-            return (
-                <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-md animate-bounce-slow">
-                    <ellipse cx="50" cy="60" rx="30" ry="35" fill="white" stroke={secondColor} strokeWidth="3" />
-                    <circle cx="40" cy="50" r="5" fill={mainColor} opacity="0.5" />
-                    <circle cx="60" cy="70" r="8" fill={mainColor} opacity="0.5" />
-                    <path d="M35 35 L45 45 L40 55" stroke={secondColor} strokeWidth="2" fill="none"/>
-                </svg>
-            );
-        }
-
-        // BABY (Big Head, Small Body)
-        if (stage < 10) {
-            return (
-                <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl" style={{ filter: `hue-rotate(${hueShift}deg)` }}>
-                    {/* Legs */}
-                    <path d="M40 80 L40 90" stroke={secondColor} strokeWidth="6" strokeLinecap="round"/>
-                    <path d="M60 80 L60 90" stroke={secondColor} strokeWidth="6" strokeLinecap="round"/>
-                    {/* Body */}
-                    <circle cx="50" cy="60" r="30" fill={mainColor} stroke={secondColor} strokeWidth="3"/>
-                    <circle cx="50" cy="65" r="15" fill={accentColor} opacity="0.6"/>
-                    {/* Eyes */}
-                    <circle cx="40" cy="55" r="4" fill="black"/>
-                    <circle cx="60" cy="55" r="4" fill="black"/>
-                    <circle cx="38" cy="53" r="1.5" fill="white"/>
-                    <circle cx="58" cy="53" r="1.5" fill="white"/>
-                    {/* Cheeks */}
-                    <circle cx="35" cy="62" r="3" fill="#FCA5A5" opacity="0.6"/>
-                    <circle cx="65" cy="62" r="3" fill="#FCA5A5" opacity="0.6"/>
-                    
-                    {/* ACCESSORIES (Layered) */}
-                    {stage >= 5 && (
-                        // Cap
-                        <path d="M30 40 Q50 20 70 40 L70 45 Q50 25 30 45 Z" fill="#3B82F6" stroke="black" strokeWidth="1"/> 
-                    )}
-                    
-                    {/* Type Specifics */}
-                    {type === PetType.UNICORN && <path d="M50 30 L45 45 L55 45 Z" fill="#FDE047" stroke="black" strokeWidth="1"/>}
-                    {type === PetType.DRAGON && <path d="M20 50 Q10 30 30 40" stroke={secondColor} strokeWidth="3" fill="none"/>}
-                    {type === PetType.DINO && <path d="M50 30 L45 35 L50 40 L55 35 Z" fill={secondColor} />}
-                </svg>
-            );
-        }
-
-        // ADULT (Complex)
-        return (
-            <svg viewBox="0 0 100 100" className="w-full h-full drop-shadow-xl" style={{ filter: `hue-rotate(${hueShift}deg)` }}>
-                {/* Wings (Level 20+) */}
-                {stage >= 20 && (
-                    <>
-                        <path d="M20 50 Q5 20 40 40" fill={accentColor} opacity="0.8" stroke={secondColor} strokeWidth="1"/>
-                        <path d="M80 50 Q95 20 60 40" fill={accentColor} opacity="0.8" stroke={secondColor} strokeWidth="1"/>
-                    </>
-                )}
-
-                {/* Tail */}
-                <path d="M30 80 Q10 80 20 60" stroke={mainColor} strokeWidth="8" strokeLinecap="round" fill="none"/>
-                
-                {/* Legs */}
-                <path d="M35 85 L35 95" stroke={secondColor} strokeWidth="8" strokeLinecap="round"/>
-                <path d="M65 85 L65 95" stroke={secondColor} strokeWidth="8" strokeLinecap="round"/>
-                
-                {/* Body */}
-                <rect x="30" y="40" width="40" height="50" rx="15" fill={mainColor} stroke={secondColor} strokeWidth="3"/>
-                <path d="M40 50 L60 50 L60 80 L40 80 Z" fill={accentColor} opacity="0.5" rx="5"/>
-                
-                {/* Head */}
-                <circle cx="50" cy="35" r="25" fill={mainColor} stroke={secondColor} strokeWidth="3"/>
-                
-                {/* Face */}
-                <circle cx="42" cy="32" r="4" fill="black"/>
-                <circle cx="58" cy="32" r="4" fill="black"/>
-                <path d="M48 40 Q50 43 52 40" stroke="black" strokeWidth="2" fill="none" strokeLinecap="round"/>
-
-                {/* ACCESSORIES (Layered on top) */}
-                {stage >= 10 && (
-                    // Sunglasses
-                    <g>
-                        <rect x="35" y="28" width="12" height="8" fill="black" rx="2"/>
-                        <rect x="53" y="28" width="12" height="8" fill="black" rx="2"/>
-                        <line x1="47" y1="32" x2="53" y2="32" stroke="black" strokeWidth="1"/>
-                    </g>
-                )}
-                {stage >= 30 && (
-                    // Crown
-                    <path d="M35 15 L42 25 L50 10 L58 25 L65 15 L65 28 L35 28 Z" fill="#FACC15" stroke="#CA8A04" strokeWidth="1"/>
-                )}
-
-                {/* Type Specifics */}
-                {type === PetType.UNICORN && <path d="M50 10 L45 25 L55 25 Z" fill="#FDE047" stroke="black" strokeWidth="1"/>}
-            </svg>
-        );
-    };
-
     if (!currentUser) return null;
     const theme = myPet ? getTheme(myPet.type) : getTheme(PetType.DINO);
+    const visuals = myPet ? getPetVisuals(myPet.stage, myPet.type) : getPetVisuals(1, PetType.DINO);
 
     return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-fade-in">
@@ -334,14 +269,25 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                             {/* Scene Content */}
                             <div className="absolute inset-0 flex items-center justify-center">
                                 
-                                {/* Pet */}
-                                <div className={`w-40 h-40 transition-transform duration-500 z-10
+                                {/* Living Pet Container */}
+                                <div className={`relative transition-transform duration-500 z-10
                                     ${animationState === 'WALK' ? 'animate-bounce-slow' : ''}
                                     ${animationState === 'EATING' ? 'scale-110' : ''}
                                     ${animationState === 'SLEEPING' ? 'scale-90 opacity-80' : 'animate-float-fast'}
                                     ${animationState === 'CLEANING' ? 'translate-x-10' : ''}
-                                `}>
-                                    {renderMicroPet(myPet.stage, myPet.type)}
+                                `} style={{ transform: visuals.transform }}>
+                                    
+                                    {/* Accessory Layers */}
+                                    {myPet.stage >= 10 && <img src={ACCESSORIES.GLASSES} className="absolute top-1/4 left-1/2 -translate-x-1/2 w-1/2 z-20" alt="Glasses" />}
+                                    {myPet.stage >= 20 && <img src={ACCESSORIES.CROWN} className="absolute -top-1/4 left-1/2 -translate-x-1/2 w-1/2 z-20" alt="Crown" />}
+                                    
+                                    {/* Main Pet Body with Hue Shift */}
+                                    <img 
+                                        src={visuals.src} 
+                                        alt="Pet" 
+                                        className="w-32 h-32 object-contain drop-shadow-xl"
+                                        style={{ filter: visuals.filter }}
+                                    />
                                 </div>
 
                                 {/* Floating Action Items */}
@@ -432,7 +378,7 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                             
                             <div className="mt-4 flex justify-between items-center px-2">
                                 <div className="text-xs font-bold text-slate-500 bg-white/50 px-2 py-1 rounded-md border border-white/50">
-                                    Lvl {myPet.stage}
+                                    Lvl {myPet.stage} • {visuals.title}
                                 </div>
                                 <div className="flex items-center gap-1 bg-white/50 px-2 py-1 rounded-md border border-white/50">
                                     <Zap size={10} className="text-cyan-600 fill-cyan-600"/>
@@ -450,12 +396,6 @@ const PetRoom: React.FC<PetRoomProps> = ({ onClose }) => {
                 
                 @keyframes float-fast { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(2px, -2px); } 50% { transform: translate(-2px, 2px); } 75% { transform: translate(2px, 2px); } }
                 .animate-float-fast { animation: float-fast 0.5s linear infinite; }
-
-                @keyframes float-slow { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-                .animate-float-slow { animation: float-slow 4s ease-in-out infinite; }
-                
-                @keyframes float-medium { 0%, 100% { transform: translateY(0) rotate(5deg); } 50% { transform: translateY(-15px) rotate(-5deg); } }
-                .animate-float-medium { animation: float-medium 3s ease-in-out infinite; }
             `}</style>
         </div>
     );

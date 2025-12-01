@@ -88,7 +88,7 @@ const ChildDashboard: React.FC = () => {
   const completedTasks = tasks.filter(t => t.status === TaskStatus.APPROVED);
   const doneList = [...pendingTasks, ...completedTasks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Pet Assets for Dashboard Preview
+  // Pet Rendering Logic (Duplicated for Preview consistency)
   const BASE_URL = "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis";
   const PET_ASSETS = {
       EGG: `${BASE_URL}/Food/Egg.png`,
@@ -96,17 +96,40 @@ const ChildDashboard: React.FC = () => {
       UNICORN: `${BASE_URL}/Animals/Unicorn.png`,
       DINO: `${BASE_URL}/Animals/T-Rex.png`
   };
+  const ACCESSORIES = {
+      CROWN: `${BASE_URL}/Objects/Crown.png`,
+      GLASSES: `${BASE_URL}/Objects/Glasses.png`,
+  };
 
-  const getPetDashboardImage = (pet: any) => {
-      if (pet.stage === 1) return PET_ASSETS.EGG;
-      switch (pet.type) {
-          case PetType.DRAGON: return PET_ASSETS.DRAGON;
-          case PetType.UNICORN: return PET_ASSETS.UNICORN;
-          case PetType.DINO: return PET_ASSETS.DINO;
-          default: return PET_ASSETS.EGG;
+  const getPetPreviewProps = (pet: any) => {
+      if (!pet) return { src: PET_ASSETS.EGG, filter: '', transform: 'scale(1)' };
+      
+      let src = PET_ASSETS.EGG;
+      if (pet.stage > 1) {
+          switch(pet.type) {
+              case PetType.DRAGON: src = PET_ASSETS.DRAGON; break;
+              case PetType.UNICORN: src = PET_ASSETS.UNICORN; break;
+              case PetType.DINO: src = PET_ASSETS.DINO; break;
+          }
       }
+
+      // Visual Logic matching PetRoom
+      const hue = (pet.stage * 15) % 360;
+      const filter = `hue-rotate(${hue}deg)`;
+      
+      let scaleX = 1;
+      let scaleY = 1;
+      if (pet.stage >= 2 && pet.stage < 10) { scaleX = 1.15; scaleY = 0.9; } // Baby
+      else if (pet.stage >= 10 && pet.stage < 20) { scaleX = 0.9; scaleY = 1.1; } // Teen
+      else if (pet.stage >= 30) { scaleX = 1.2; scaleY = 1.1; } // Mythic
+
+      const transform = `scaleX(${scaleX}) scaleY(${scaleY})`;
+
+      return { src, filter, transform };
   };
   
+  const petVisuals = getPetPreviewProps(myPet);
+
   // Calendar Events: Today and Tomorrow
   const now = new Date();
   const currentDayIndex = now.getDay() || 7; // 1-7
@@ -473,7 +496,7 @@ const ChildDashboard: React.FC = () => {
 
       {/* Activities Grid */}
       <div className="px-4 mb-6 grid grid-cols-2 gap-4">
-        {/* Schedule Card - UPDATED to show Today AND Tomorrow */}
+        {/* Schedule Card */}
         <button 
             onClick={() => setShowSchedule(true)}
             className="col-span-2 bg-gradient-to-r from-teal-400 to-teal-600 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden flex flex-row items-center justify-between"
@@ -549,11 +572,17 @@ const ChildDashboard: React.FC = () => {
                            <h3 className="font-bold font-display flex items-center gap-1 text-sm">{myPet.name}</h3>
                            <p className="text-orange-100 text-[10px]">Lvl {myPet.stage}</p>
                         </div>
-                        <img 
-                            src={getPetDashboardImage(myPet)} 
-                            alt="Pet" 
-                            className="w-16 h-16 object-contain absolute right-[-10px] top-4 drop-shadow-md group-hover:scale-110 transition-transform duration-300" 
-                        />
+                        {/* Live Procedural Preview */}
+                        <div className="absolute right-[-10px] top-4 w-16 h-16 pointer-events-none">
+                            {myPet.stage >= 10 && <img src={ACCESSORIES.GLASSES} className="absolute top-[25%] left-1/2 -translate-x-1/2 w-1/2 z-20" alt="Glasses" />}
+                            {myPet.stage >= 20 && <img src={ACCESSORIES.CROWN} className="absolute -top-[10%] left-1/2 -translate-x-1/2 w-1/2 z-20" alt="Crown" />}
+                            <img 
+                                src={petVisuals.src} 
+                                alt="Pet" 
+                                className="w-full h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-300" 
+                                style={{ filter: petVisuals.filter, transform: petVisuals.transform }}
+                            />
+                        </div>
                     </div>
                     
                     <div className="relative z-10 w-full mt-auto space-y-1">
