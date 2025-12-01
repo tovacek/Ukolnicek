@@ -4,6 +4,8 @@ export enum UserRole {
   CHILD = 'CHILD'
 }
 
+export type AppTheme = 'DEFAULT' | 'SPACE' | 'CANDY' | 'FOREST';
+
 export interface AllowanceSettings {
   amount: number;
   frequency: 'WEEKLY' | 'MONTHLY';
@@ -19,16 +21,14 @@ export interface User {
   role: UserRole;
   avatarUrl?: string; // Stores URL or Base64 string of photo
   points?: number; // Only for children (Stars/Chores)
-  petPoints?: number; // Only for children (Energy/Games)
   balance?: number; // Only for children (CZK)
   password?: string; // Main Login Password (for Parents)
   pin?: string;      // Profile Lock PIN (for switching profiles)
   familyName?: string; // Name of the family group
   allowanceSettings?: AllowanceSettings;
   lastLoginRewardDate?: string; // YYYY-MM-DD of last daily login reward
+  lastAllowanceDate?: string; // YYYY-MM-DD of last automatic allowance payment
   createdAt?: string; // ISO Date string of account creation
-  towerHighScoreMath?: number;
-  towerHighScoreEnglish?: number;
   birthYear?: number;
 }
 
@@ -68,12 +68,16 @@ export interface RewardHistory {
   date: string;
 }
 
+export type PayoutType = 'PARENT' | 'CHILD';
+
 export interface PayoutRecord {
   id: string;
   familyId: string;
   childId: string;
   amount: number;
   date: string; // ISO Date string
+  note?: string; // Reason for withdrawal
+  type?: PayoutType; // Who initiated the transaction
 }
 
 export interface Goal {
@@ -97,53 +101,12 @@ export interface CalendarEvent {
   specificDate?: string; // New: YYYY-MM-DD for one-time events
 }
 
-export interface GameResult {
-  id: string;
-  familyId: string;
-  childId: string;
-  category: string;
-  score: number;
-  correctCount: number;
-  incorrectCount: number;
-  rewardAmount: number;
-  date: string;
-}
-
 export interface AppNotification {
   id: string;
   familyId: string;
   recipientId: string;
   message: string;
-  type: 'NEW_TASK' | 'APPROVAL_NEEDED' | 'MONEY_EARNED' | 'GAME_HIGHSCORE';
+  type: 'NEW_TASK' | 'APPROVAL_NEEDED' | 'MONEY_EARNED' | 'ALLOWANCE_PAID';
   isRead: boolean;
   createdAt: string;
-}
-
-// --- PETS ---
-export enum PetType {
-  DRAGON = 'DRAGON',
-  UNICORN = 'UNICORN',
-  DINO = 'DINO'
-}
-
-export enum PetStage {
-  EGG = 1,
-  BABY = 2,
-  TEEN = 5,
-  ADULT = 10,
-  MYTHIC = 20,
-  LEGEND = 30
-}
-
-export interface Pet {
-  id: string;
-  familyId: string;
-  childId: string;
-  name: string;
-  type: PetType;
-  stage: number; // Changed to number to support infinite levels
-  health: number; // 0-100
-  happiness: number; // 0-100
-  experience: number; // 0-100 (resets on evolution)
-  lastInteraction: string; // ISO timestamp
 }

@@ -1,18 +1,15 @@
-
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { TaskStatus, Task, UserRole, Goal, PetType } from '../types';
-import { CheckCircle2, Star, Coins, LogOut, Clock, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Gamepad2, Egg, Heart, Smile, Zap, ArrowRight } from 'lucide-react';
+import { TaskStatus, Task, UserRole, Goal, AppTheme } from '../types';
+import { CheckCircle2, Star, Coins, LogOut, Calendar, History, Wallet, X, ArrowRightLeft, Repeat, Trophy, ListTodo, Plus, Sparkles, Settings, Lock, Target, Trash2, Pencil, PiggyBank, RefreshCw, AlertTriangle, Sun, AlertCircle, Heart, Smile, Zap, ArrowRight, ChevronRight, Clock, Banknote, Palette } from 'lucide-react';
 import { generateMotivationalMessage } from '../services/geminiService';
 import AvatarDisplay from './AvatarDisplay';
 import ImageUploader from './ImageUploader';
 import ProfilePhotoModal from './ProfilePhotoModal';
-import TowerGame from './TowerGame';
-import PetRoom from './PetRoom';
 import ScheduleModal from './ScheduleModal';
 
 const ChildDashboard: React.FC = () => {
-  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, updateChild, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward, pets, calendarEvents } = useApp();
+  const { currentUser, getTasksForChild, updateTaskStatus, logout, payoutHistory, convertPointsToMoney, addTask, updateUserPin, updateChild, goals, addGoal, updateGoal, deleteGoal, getAllowanceProgress, deleteTask, refreshData, checkAndClaimDailyReward, calendarEvents, createWithdrawal, setTheme, currentTheme } = useApp();
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [motivation, setMotivation] = useState<string>("");
@@ -26,6 +23,11 @@ const ChildDashboard: React.FC = () => {
   // Exchange Modal State
   const [showExchange, setShowExchange] = useState(false);
   const [exchangePoints, setExchangePoints] = useState(0);
+
+  // Withdrawal Modal State
+  const [showWithdraw, setShowWithdraw] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState(0);
+  const [withdrawNote, setWithdrawNote] = useState('');
 
   // Custom Task Modal State
   const [showCustomTaskModal, setShowCustomTaskModal] = useState(false);
@@ -52,12 +54,6 @@ const ChildDashboard: React.FC = () => {
   // Profile Photo Modal
   const [showProfilePhotoModal, setShowProfilePhotoModal] = useState(false);
 
-  // Game Modal State
-  const [showGame, setShowGame] = useState(false);
-
-  // Pet Room Modal State
-  const [showPetRoom, setShowPetRoom] = useState(false);
-
   // Schedule Modal State
   const [showSchedule, setShowSchedule] = useState(false);
 
@@ -68,7 +64,6 @@ const ChildDashboard: React.FC = () => {
   // Get ALL tasks for child
   const tasks = currentUser ? getTasksForChild(currentUser.id) : [];
   const childGoals = currentUser ? goals.filter(g => g.childId === currentUser.id) : [];
-  const myPet = currentUser ? pets.find(p => p.childId === currentUser.id) : null;
 
   // Calculate Daily Progress
   const todayStr = new Date().toISOString().split('T')[0];
@@ -88,57 +83,24 @@ const ChildDashboard: React.FC = () => {
   const completedTasks = tasks.filter(t => t.status === TaskStatus.APPROVED);
   const doneList = [...pendingTasks, ...completedTasks].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  // Pet Rendering Logic (Duplicated for Preview consistency)
-  const BASE_URL = "https://raw.githubusercontent.com/Tarikul-Islam-Anik/Animated-Fluent-Emojis/master/Emojis";
-  const PET_ASSETS = {
-      EGG: `${BASE_URL}/Food/Egg.png`,
-      DRAGON: `${BASE_URL}/Animals/Dragon.png`,
-      UNICORN: `${BASE_URL}/Animals/Unicorn.png`,
-      DINO: `${BASE_URL}/Animals/T-Rex.png`
-  };
-  const ACCESSORIES = {
-      CROWN: `${BASE_URL}/Objects/Crown.png`,
-      GLASSES: `${BASE_URL}/Objects/Glasses.png`,
-  };
-
-  const getPetPreviewProps = (pet: any) => {
-      if (!pet) return { src: PET_ASSETS.EGG, filter: '', transform: 'scale(1)' };
+  // --- CALENDAR LOGIC (Whole Week) ---
+  const getWeekDates = () => {
+      const now = new Date();
+      const currentDay = now.getDay() || 7; // 1 (Mon) - 7 (Sun)
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - currentDay + 1);
       
-      let src = PET_ASSETS.EGG;
-      if (pet.stage > 1) {
-          switch(pet.type) {
-              case PetType.DRAGON: src = PET_ASSETS.DRAGON; break;
-              case PetType.UNICORN: src = PET_ASSETS.UNICORN; break;
-              case PetType.DINO: src = PET_ASSETS.DINO; break;
-          }
+      const dates = [];
+      for (let i = 0; i < 7; i++) {
+          const d = new Date(monday);
+          d.setDate(monday.getDate() + i);
+          dates.push(d);
       }
-
-      // Visual Logic matching PetRoom
-      const hue = (pet.stage * 15) % 360;
-      const filter = `hue-rotate(${hue}deg)`;
-      
-      let scaleX = 1;
-      let scaleY = 1;
-      if (pet.stage >= 2 && pet.stage < 10) { scaleX = 1.15; scaleY = 0.9; } // Baby
-      else if (pet.stage >= 10 && pet.stage < 20) { scaleX = 0.9; scaleY = 1.1; } // Teen
-      else if (pet.stage >= 30) { scaleX = 1.2; scaleY = 1.1; } // Mythic
-
-      const transform = `scaleX(${scaleX}) scaleY(${scaleY})`;
-
-      return { src, filter, transform };
+      return dates;
   };
-  
-  const petVisuals = getPetPreviewProps(myPet);
 
-  // Calendar Events: Today and Tomorrow
-  const now = new Date();
-  const currentDayIndex = now.getDay() || 7; // 1-7
-  
-  // Calculate tomorrow
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-  const tomorrowDayIndex = tomorrow.getDay() || 7;
+  const weekDates = getWeekDates();
+  const dayNames = ['Po', 'Út', 'St', 'Čt', 'Pá', 'So', 'Ne'];
 
   const getEventsForDate = (dStr: string, dIndex: number) => {
         return currentUser ? calendarEvents.filter(e => {
@@ -147,9 +109,6 @@ const ChildDashboard: React.FC = () => {
         return (e.isRecurring && e.dayIndex === dIndex) || (!e.isRecurring && e.specificDate === dStr);
     }).sort((a,b) => a.time.localeCompare(b.time)) : [];
   };
-
-  const todaysEvents = getEventsForDate(todayStr, currentDayIndex);
-  const tomorrowsEvents = getEventsForDate(tomorrowStr, tomorrowDayIndex);
 
   useEffect(() => {
     const checkReward = async () => {
@@ -239,6 +198,25 @@ const ChildDashboard: React.FC = () => {
           convertPointsToMoney(currentUser.id, exchangePoints);
           setShowExchange(false);
           setExchangePoints(0);
+          triggerCelebration();
+      }
+  };
+
+  const handleWithdrawOpen = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (currentUser && (currentUser.balance || 0) > 0) {
+          setWithdrawAmount(0);
+          setWithdrawNote('');
+          setShowWithdraw(true);
+      }
+  };
+
+  const submitWithdraw = () => {
+      if (currentUser && withdrawAmount > 0) {
+          createWithdrawal(currentUser.id, withdrawAmount, withdrawNote);
+          setShowWithdraw(false);
+          setWithdrawAmount(0);
+          setWithdrawNote('');
           triggerCelebration();
       }
   };
@@ -337,19 +315,22 @@ const ChildDashboard: React.FC = () => {
         title: t.title,
         date: t.date,
         points: t.rewardPoints,
-        money: t.rewardMoney
+        money: t.rewardMoney,
+        note: null
     })),
     ...myPayouts.map(p => ({
         id: p.id,
         type: 'PAYOUT',
-        title: 'Výplata odměny',
+        title: 'Výběr z kasičky',
         date: p.date,
         points: 0,
-        money: -p.amount
+        money: -p.amount,
+        note: p.note
     }))
   ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const maxExchangeablePoints = Math.floor((currentUser.points || 0) / 10) * 10;
+  const currentBalance = currentUser.balance || 0;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 font-sans selection:bg-brand-yellow/30">
@@ -396,7 +377,7 @@ const ChildDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Card - Updated for Pet Points */}
+        {/* Stats Card */}
         <div 
             className="w-full bg-brand-dark rounded-2xl p-4 text-white shadow-lg shadow-brand-dark/20 relative overflow-hidden group"
         >
@@ -423,22 +404,21 @@ const ChildDashboard: React.FC = () => {
               </div>
 
               {/* MONEY */}
-              <div className="flex-1 flex flex-col items-center p-2 cursor-pointer hover:bg-white/5 transition-colors rounded-lg" onClick={() => setShowHistory(true)}>
-                 <div className="flex items-center justify-center gap-1 text-brand-green mb-1">
-                  <Coins size={20} />
-                </div>
-                <span className="text-2xl font-display font-bold tracking-tight">{currentUser.balance} <span className="text-sm">Kč</span></span>
-                <p className="text-[10px] text-brand-green/60 uppercase tracking-wider font-medium">Kasička</p>
-                <div className="mt-1 text-[10px] text-gray-400 flex items-center gap-1"><History size={8}/> Historie</div>
-              </div>
-
-              {/* PET POINTS (Energy) */}
-              <div className="flex-1 flex flex-col items-center p-2">
-                <div className="flex items-center justify-center gap-1 text-cyan-400 mb-1">
-                  <Zap fill="currentColor" size={20} />
-                </div>
-                <span className="text-2xl font-display font-bold tracking-tight">{currentUser.petPoints || 0}</span>
-                <p className="text-[10px] text-cyan-400/60 uppercase tracking-wider font-medium">Energie</p>
+              <div className="flex-1 flex flex-col items-center p-2 relative">
+                 <div className="flex items-center justify-center gap-1 text-brand-green mb-1 cursor-pointer" onClick={() => setShowHistory(true)}>
+                    <Coins size={20} />
+                 </div>
+                 <span className="text-2xl font-display font-bold tracking-tight cursor-pointer" onClick={() => setShowHistory(true)}>{currentUser.balance} <span className="text-sm">Kč</span></span>
+                 <p className="text-[10px] text-brand-green/60 uppercase tracking-wider font-medium cursor-pointer mb-1" onClick={() => setShowHistory(true)}>Kasička</p>
+                 
+                 {(currentUser.balance || 0) > 0 && (
+                     <button 
+                         onClick={handleWithdrawOpen}
+                         className="bg-brand-green text-white rounded-full px-2 py-0.5 text-[10px] font-bold shadow-md hover:bg-emerald-500 hover:scale-105 transition-all flex items-center gap-1"
+                     >
+                         <Banknote size={10} /> Vybrat
+                     </button>
+                 )}
               </div>
 
           </div>
@@ -494,124 +474,57 @@ const ChildDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Activities Grid */}
-      <div className="px-4 mb-6 grid grid-cols-2 gap-4">
-        {/* Schedule Card */}
-        <button 
-            onClick={() => setShowSchedule(true)}
-            className="col-span-2 bg-gradient-to-r from-teal-400 to-teal-600 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden flex flex-row items-center justify-between"
-        >
-            <div className="relative z-10 text-left w-full pr-12">
-                <h3 className="font-bold font-display flex items-center gap-1 mb-2"><Calendar size={18}/> Můj Rozvrh</h3>
-                
-                {todaysEvents.length === 0 && tomorrowsEvents.length === 0 ? (
-                    <p className="text-teal-100 text-xs">Žádné plány na nejbližší dny.</p>
-                ) : (
-                    <div className="flex flex-col gap-2">
-                        {/* Today's Events */}
-                        {todaysEvents.length > 0 && (
-                            <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm">
-                                <p className="text-teal-50 text-[10px] font-bold uppercase mb-1 flex items-center gap-1"><Sun size={10}/> Dnes</p>
-                                {todaysEvents.slice(0, 2).map((e, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 text-xs mb-0.5">
-                                        <span className="font-bold bg-white/20 px-1.5 rounded text-[10px] min-w-[35px] text-center">{e.time}</span>
-                                        <span className="truncate">{e.title}</span>
-                                    </div>
-                                ))}
-                                {todaysEvents.length > 2 && <span className="text-[9px] opacity-80 pl-1">+ další...</span>}
-                            </div>
-                        )}
+      {/* WEEKLY CALENDAR */}
+      <div className="px-4 mb-6">
+        <div className="bg-gradient-to-r from-teal-400 to-teal-600 rounded-2xl p-4 text-white shadow-lg relative overflow-hidden">
+             {/* Header */}
+             <div className="flex justify-between items-center mb-4 relative z-10">
+                <h3 className="font-bold font-display flex items-center gap-2"><Calendar size={18}/> Můj Rozvrh</h3>
+                <button onClick={() => setShowSchedule(true)} className="bg-white/20 hover:bg-white/30 p-1.5 rounded-full transition-colors">
+                    <ArrowRight size={16} />
+                </button>
+             </div>
 
-                        {/* Tomorrow's Events */}
-                        {tomorrowsEvents.length > 0 && (
-                            <div className="bg-white/10 p-2 rounded-lg backdrop-blur-sm">
-                                <p className="text-teal-50 text-[10px] font-bold uppercase mb-1 flex items-center gap-1"><ArrowRight size={10}/> Zítra</p>
-                                {tomorrowsEvents.slice(0, 2).map((e, idx) => (
-                                    <div key={idx} className="flex items-center gap-2 text-xs mb-0.5">
-                                        <span className="font-bold bg-white/20 px-1.5 rounded text-[10px] min-w-[35px] text-center">{e.time}</span>
-                                        <span className="truncate">{e.title}</span>
-                                    </div>
-                                ))}
-                                {tomorrowsEvents.length > 2 && <span className="text-[9px] opacity-80 pl-1">+ další...</span>}
-                            </div>
-                        )}
-                    </div>
-                )}
-            </div>
-            <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/20 p-3 rounded-full backdrop-blur-sm">
-                <Calendar size={32} />
-            </div>
-        </button>
+             {/* Week Scroll */}
+             <div className="relative z-10 flex gap-2 overflow-x-auto pb-2 scrollbar-hide snap-x">
+                 {weekDates.map((date, index) => {
+                     const dayId = index + 1; // 1-7
+                     const dateStr = date.toISOString().split('T')[0];
+                     const isToday = dateStr === todayStr;
+                     const events = getEventsForDate(dateStr, dayId);
+                     const hasEvents = events.length > 0;
 
-        {/* Game Card */}
-        <button 
-            onClick={() => setShowGame(true)}
-            className="col-span-1 bg-gradient-to-br from-violet-600 to-indigo-600 rounded-2xl p-4 text-white shadow-lg hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden flex flex-col justify-between h-40"
-        >
-            <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 hover:opacity-100 transition-opacity"></div>
-            <div className="relative z-10">
-                <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Gamepad2 size={18}/> Hra</h3>
-                <p className="text-violet-200 text-[10px]">Vyhraj energii pro mazlíčka!</p>
-            </div>
-            <div className="flex items-center justify-center flex-1">
-                <Trophy className="text-yellow-300 w-12 h-12 drop-shadow-md" />
-            </div>
-        </button>
+                     return (
+                         <div 
+                            key={index}
+                            className={`flex-shrink-0 w-32 md:w-36 rounded-xl p-2 snap-start flex flex-col gap-2 transition-all border ${isToday ? 'bg-white text-teal-900 border-white shadow-md scale-105' : 'bg-teal-700/30 border-teal-300/30 text-teal-50'}`}
+                         >
+                             <div className="text-center border-b border-black/5 pb-1 mb-1">
+                                 <div className="text-xs font-bold uppercase opacity-80">{dayNames[index]}</div>
+                                 <div className="text-sm font-bold">{date.getDate()}.{date.getMonth() + 1}.</div>
+                             </div>
+                             
+                             <div className="flex-1 flex flex-col gap-1 min-h-[50px] justify-start">
+                                 {hasEvents ? (
+                                     events.map((e, i) => (
+                                         <div key={i} className={`text-xs p-1.5 rounded-md text-left leading-tight whitespace-normal break-words ${isToday ? 'bg-teal-100 text-teal-800' : 'bg-white/20'}`}>
+                                             <span className="font-bold text-[10px] opacity-80 block mb-0.5">{e.time}</span>
+                                             {e.title}
+                                         </div>
+                                     ))
+                                 ) : (
+                                     <div className="text-center text-[10px] opacity-60 italic mt-4">Volno</div>
+                                 )}
+                             </div>
+                         </div>
+                     );
+                 })}
+             </div>
 
-        {/* Pet Card (Updated with Live Preview) */}
-        <button 
-            onClick={() => setShowPetRoom(true)}
-            className="col-span-1 bg-gradient-to-br from-orange-400 to-red-500 rounded-2xl p-4 text-white shadow-lg hover:scale-[1.02] active:scale-98 transition-all relative overflow-hidden flex flex-col justify-between h-40 group"
-        >
-            <div className="absolute top-0 left-0 w-full h-full bg-white/5 opacity-0 hover:opacity-100 transition-opacity"></div>
-            
-            {myPet ? (
-                <>
-                    <div className="relative z-10 w-full flex justify-between items-start">
-                        <div>
-                           <h3 className="font-bold font-display flex items-center gap-1 text-sm">{myPet.name}</h3>
-                           <p className="text-orange-100 text-[10px]">Lvl {myPet.stage}</p>
-                        </div>
-                        {/* Live Procedural Preview */}
-                        <div className="absolute right-[-10px] top-4 w-16 h-16 pointer-events-none">
-                            {myPet.stage >= 10 && <img src={ACCESSORIES.GLASSES} className="absolute top-[25%] left-1/2 -translate-x-1/2 w-1/2 z-20" alt="Glasses" />}
-                            {myPet.stage >= 20 && <img src={ACCESSORIES.CROWN} className="absolute -top-[10%] left-1/2 -translate-x-1/2 w-1/2 z-20" alt="Crown" />}
-                            <img 
-                                src={petVisuals.src} 
-                                alt="Pet" 
-                                className="w-full h-full object-contain drop-shadow-md group-hover:scale-110 transition-transform duration-300" 
-                                style={{ filter: petVisuals.filter, transform: petVisuals.transform }}
-                            />
-                        </div>
-                    </div>
-                    
-                    <div className="relative z-10 w-full mt-auto space-y-1">
-                        <div className="flex items-center gap-1">
-                            <Heart size={8} className="fill-red-200 text-red-200" />
-                            <div className="h-1.5 flex-1 bg-black/20 rounded-full overflow-hidden">
-                                <div className="h-full bg-red-300" style={{ width: `${myPet.health}%` }}></div>
-                            </div>
-                        </div>
-                        <div className="flex items-center gap-1">
-                            <Smile size={8} className="fill-yellow-200 text-yellow-200" />
-                            <div className="h-1.5 flex-1 bg-black/20 rounded-full overflow-hidden">
-                                <div className="h-full bg-yellow-300" style={{ width: `${myPet.happiness}%` }}></div>
-                            </div>
-                        </div>
-                    </div>
-                </>
-            ) : (
-                <>
-                     <div className="relative z-10">
-                        <h3 className="font-bold font-display flex items-center gap-1 mb-1"><Egg size={18}/> Mazlíček</h3>
-                        <p className="text-orange-100 text-[10px]">Adoptuj si mě!</p>
-                    </div>
-                    <div className="flex items-center justify-center flex-1">
-                        <img src={PET_ASSETS.EGG} className="w-12 h-12 drop-shadow-md" alt="Egg" />
-                    </div>
-                </>
-            )}
-        </button>
+             <div className="absolute right-[-10px] bottom-[-20px] text-white/10 pointer-events-none">
+                <Calendar size={120} />
+            </div>
+        </div>
       </div>
 
       {/* Goals */}
@@ -826,16 +739,6 @@ const ChildDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Game Modal */}
-      {showGame && (
-          <TowerGame onClose={() => setShowGame(false)} />
-      )}
-
-      {/* Pet Room Modal */}
-      {showPetRoom && (
-          <PetRoom onClose={() => setShowPetRoom(false)} />
-      )}
-
       {/* Schedule Modal */}
       {showSchedule && currentUser && (
           <ScheduleModal childId={currentUser.id} onClose={() => setShowSchedule(false)} />
@@ -927,14 +830,23 @@ const ChildDashboard: React.FC = () => {
                           <div className="text-center text-gray-400 py-10">Zatím prázdno...</div>
                       ) : (
                           historyItems.map((item, idx) => (
-                              <div key={`${item.id}-${idx}`} className="flex justify-between items-center p-3 bg-gray-50 rounded-xl border border-gray-100">
+                              <div key={`${item.id}-${idx}`} className="flex justify-between items-start p-3 bg-gray-50 rounded-xl border border-gray-100">
                                   <div>
                                       <div className="font-bold text-gray-800 text-sm">{item.title}</div>
                                       <div className="text-xs text-gray-400">{new Date(item.date).toLocaleDateString('cs-CZ')}</div>
+                                      {item.note && <div className="text-xs text-gray-500 mt-1 italic">"{item.note}"</div>}
                                   </div>
                                   <div className="text-right">
-                                      {item.points !== 0 && <div className="font-bold text-brand-blue text-sm">+{item.points}b</div>}
-                                      {item.money !== 0 && <div className={`font-bold text-sm ${item.money > 0 ? 'text-brand-green' : 'text-gray-500'}`}>{item.money > 0 ? '+' : ''}{item.money} Kč</div>}
+                                      {item.points !== 0 && (
+                                          <div className={`font-bold text-sm ${item.points > 0 ? 'text-brand-blue' : 'text-slate-400'}`}>
+                                              {item.points > 0 ? '+' : ''}{item.points}b
+                                          </div>
+                                      )}
+                                      {item.money !== 0 && (
+                                          <div className={`font-bold text-sm ${item.money > 0 ? 'text-brand-green' : 'text-gray-500'}`}>
+                                              {item.money > 0 ? '+' : ''}{item.money} Kč
+                                          </div>
+                                      )}
                                   </div>
                               </div>
                           ))
@@ -996,6 +908,77 @@ const ChildDashboard: React.FC = () => {
           </div>
       )}
 
+      {/* Withdraw Modal */}
+      {showWithdraw && currentUser && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-white w-full max-w-sm rounded-[2rem] p-6 shadow-2xl animate-scale-in">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-brand-dark flex items-center gap-2"><Banknote/> Vybrat hotovost</h3>
+                      <button onClick={() => setShowWithdraw(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
+                  </div>
+
+                  <div className="text-center mb-6">
+                      <div className="text-sm text-gray-500 mb-1">Aktuálně máš v kasičce</div>
+                      <div className="text-3xl font-bold text-brand-green">{currentUser.balance} Kč</div>
+                  </div>
+
+                  <div className="mb-8">
+                      <div className="flex justify-between text-sm font-bold text-gray-600 mb-2">
+                          <span>0 Kč</span>
+                          <span className="text-brand-green">{withdrawAmount} Kč</span>
+                          <span>{currentUser.balance} Kč</span>
+                      </div>
+                      <input 
+                        type="range" 
+                        min="0" 
+                        max={currentUser.balance} 
+                        step="10" 
+                        value={withdrawAmount} 
+                        onChange={(e) => setWithdrawAmount(Number(e.target.value))}
+                        className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-green"
+                      />
+                      
+                      <div className="grid grid-cols-3 gap-2 mt-4">
+                          {[50, 100, 200].map(amount => (
+                              <button
+                                key={amount}
+                                onClick={() => setWithdrawAmount(Math.min(amount, currentUser.balance || 0))}
+                                disabled={(currentUser.balance || 0) < amount}
+                                className="py-2 bg-gray-100 text-gray-600 font-bold rounded-lg hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+                              >
+                                  {amount} Kč
+                              </button>
+                          ))}
+                      </div>
+
+                      <div className="mt-4">
+                          <label className="block text-sm font-bold text-gray-500 mb-1">Za co to je?</label>
+                          <input 
+                              type="text" 
+                              value={withdrawNote}
+                              onChange={(e) => setWithdrawNote(e.target.value)}
+                              placeholder="např. Zmrzlina, Hračka..."
+                              className="w-full p-3 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-brand-green outline-none text-gray-800"
+                          />
+                      </div>
+
+                      <div className="mt-6 bg-green-50 p-4 rounded-xl text-center">
+                          <span className="text-gray-500 text-sm">Zůstatek po výběru:</span>
+                          <span className="block text-xl font-bold text-slate-800">{(currentUser.balance || 0) - withdrawAmount} Kč</span>
+                      </div>
+                  </div>
+
+                  <button 
+                      onClick={submitWithdraw}
+                      disabled={withdrawAmount === 0}
+                      className="w-full py-4 bg-brand-green text-white font-bold rounded-xl shadow-lg shadow-green-200 hover:bg-green-600 transition-all active:scale-95 disabled:opacity-50"
+                  >
+                      Potvrdit výběr
+                  </button>
+              </div>
+          </div>
+      )}
+
       {/* Settings Modal */}
       {showSettings && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
@@ -1005,19 +988,48 @@ const ChildDashboard: React.FC = () => {
                       <button onClick={() => setShowSettings(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={20}/></button>
                   </div>
 
-                  <div className="space-y-4">
-                      <h4 className="font-bold text-gray-700 border-b pb-2">Změnit PIN</h4>
+                  <div className="space-y-6">
                       <div>
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Nový PIN (4 čísla)</label>
-                          <input type="password" maxLength={4} value={newPin} onChange={(e) => setNewPin(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-center tracking-widest font-bold text-gray-900" placeholder="####" />
+                        <h4 className="font-bold text-gray-700 border-b pb-2 mb-3 flex items-center gap-2"><Palette size={16}/> Barvičky</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                            {[
+                                { id: 'DEFAULT', name: 'Výchozí', colors: ['#FFD166', '#118AB2', '#06D6A0'] },
+                                { id: 'SPACE', name: 'Vesmír', colors: ['#10002B', '#7B2CBF', '#F72585'] },
+                                { id: 'CANDY', name: 'Cukroví', colors: ['#FFB7B2', '#A2E1DB', '#E2F0CB'] },
+                                { id: 'FOREST', name: 'Les', colors: ['#2A9D8F', '#E9C46A', '#E76F51'] },
+                            ].map(theme => (
+                                <button
+                                    key={theme.id}
+                                    onClick={() => setTheme(theme.id as AppTheme)}
+                                    className={`p-3 rounded-xl border-2 transition-all flex items-center justify-between ${currentTheme === theme.id ? 'border-brand-blue bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}
+                                >
+                                    <span className="text-sm font-bold text-gray-700">{theme.name}</span>
+                                    <div className="flex -space-x-1">
+                                        {theme.colors.map((c, i) => (
+                                            <div key={i} className="w-4 h-4 rounded-full border border-white shadow-sm" style={{ backgroundColor: c }}></div>
+                                        ))}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
                       </div>
+
                       <div>
-                          <label className="block text-xs font-bold text-gray-500 mb-1">Potvrdit PIN</label>
-                          <input type="password" maxLength={4} value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-center tracking-widest font-bold text-gray-900" placeholder="####" />
+                          <h4 className="font-bold text-gray-700 border-b pb-2 mb-3 flex items-center gap-2"><Lock size={16}/> Změnit PIN</h4>
+                          <div className="space-y-3">
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 mb-1">Nový PIN (4 čísla)</label>
+                                  <input type="password" maxLength={4} value={newPin} onChange={(e) => setNewPin(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-center tracking-widest font-bold text-gray-900" placeholder="####" />
+                              </div>
+                              <div>
+                                  <label className="block text-xs font-bold text-gray-500 mb-1">Potvrdit PIN</label>
+                                  <input type="password" maxLength={4} value={confirmPin} onChange={(e) => setConfirmPin(e.target.value)} className="w-full p-3 bg-gray-50 border rounded-xl text-center tracking-widest font-bold text-gray-900" placeholder="####" />
+                              </div>
+                              <button onClick={handlePinChange} className="w-full py-3 bg-brand-blue text-white font-bold rounded-xl shadow-md hover:bg-blue-600">Uložit PIN</button>
+                          </div>
                       </div>
+
                       {settingsMessage && <p className={`text-center text-sm font-bold ${settingsMessage.includes('!') ? 'text-green-500' : 'text-red-500'}`}>{settingsMessage}</p>}
-                      
-                      <button onClick={handlePinChange} className="w-full py-3 bg-brand-blue text-white font-bold rounded-xl shadow-md hover:bg-blue-600">Uložit PIN</button>
                   </div>
               </div>
           </div>

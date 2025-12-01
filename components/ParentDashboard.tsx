@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { TaskStatus, Task, User, UserRole, RecurringFrequency, AllowanceSettings } from '../types';
+import { TaskStatus, Task, User, UserRole, RecurringFrequency, AllowanceSettings, AppTheme } from '../types';
 import { generateSmartTasks } from '../services/geminiService';
 import { 
   Users, 
@@ -34,8 +33,10 @@ import {
   EyeOff,
   Home,
   AlertTriangle,
-  Gamepad2,
-  Trophy
+  FileText,
+  ShieldCheck,
+  Baby,
+  Palette
 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import AvatarDisplay from './AvatarDisplay';
@@ -65,10 +66,11 @@ const ParentDashboard: React.FC = () => {
     updateUserPin,
     setChildAllowance,
     refreshData,
-    gameResults
+    currentTheme,
+    setTheme
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'approve' | 'settings' | 'games'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'approve' | 'settings'>('overview');
   const [selectedChildId, setSelectedChildId] = useState<string>(getChildren()[0]?.id || '');
   const [isRefreshing, setIsRefreshing] = useState(false);
   
@@ -111,6 +113,7 @@ const ParentDashboard: React.FC = () => {
 
   // Payout Confirmation Modal State
   const [payoutConfirmation, setPayoutConfirmation] = useState<{childId: string, name: string, amount: number} | null>(null);
+  const [payoutNote, setPayoutNote] = useState('');
 
   // Task Rating Modal State (for custom tasks)
   const [ratingTask, setRatingTask] = useState<Task | null>(null);
@@ -365,12 +368,14 @@ const ParentDashboard: React.FC = () => {
       name: child.name,
       amount: child.balance || 0
     });
+    setPayoutNote('');
   };
 
   const handleConfirmPayout = () => {
     if (payoutConfirmation) {
-      processPayout(payoutConfirmation.childId);
+      processPayout(payoutConfirmation.childId, payoutNote);
       setPayoutConfirmation(null);
+      setPayoutNote('');
     }
   };
 
@@ -455,7 +460,6 @@ const ParentDashboard: React.FC = () => {
             <CheckSquare size={20} /> <span className="hidden md:inline">Ke schválení</span>
             {pendingTasks.length > 0 && <span className="absolute top-3 right-3 md:top-auto md:right-4 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">{pendingTasks.length}</span>}
           </button>
-          <button onClick={() => setActiveTab('games')} className={`flex-1 md:flex-none p-4 text-left flex items-center gap-3 hover:bg-slate-800 transition-colors ${activeTab === 'games' ? 'bg-indigo-600 border-r-4 border-indigo-300' : ''}`}><Gamepad2 size={20} /> <span className="hidden md:inline">Výsledky her</span></button>
           <button onClick={() => setActiveTab('settings')} className={`flex-1 md:flex-none p-4 text-left flex items-center gap-3 hover:bg-slate-800 transition-colors ${activeTab === 'settings' ? 'bg-indigo-600 border-r-4 border-indigo-300' : ''}`}><Settings size={20} /> <span className="hidden md:inline">Nastavení</span></button>
         </nav>
         <div className="p-4 mt-auto border-t border-slate-800">
@@ -468,7 +472,6 @@ const ParentDashboard: React.FC = () => {
         {/* OVERVIEW TAB */}
         {activeTab === 'overview' && (
           <div className="space-y-8 animate-fade-in max-w-6xl mx-auto">
-            {/* ... Existing Overview Content ... */}
             <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Přehled dětí a financí</h2></div>
             
             <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -513,153 +516,272 @@ const ParentDashboard: React.FC = () => {
                                           <div>
                                             <h4 className="text-xl font-bold text-slate-800">{child.name}</h4>
                                             <p className="text-xs text-slate-400 mb-1">{child.birthYear ? `Narozen: ${child.birthYear}` : 'Věk nenastaven'}</p>
-                                            <div className="flex gap-2 mt-1 text-xs text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"><button onClick={() => startEdit(child)} className="hover:text-indigo-600 flex items-center gap-1"><Pencil size={12}/> Upravit</button><button onClick={() => requestDeleteChild(child.id)} className="hover:text-red-600 flex items-center gap-1"><Trash2 size={12}/> Smazat</button></div>
+                                            <div className="flex gap-2 mt-1 text-xs text-slate-400 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                              <button onClick={() => startEdit(child)} className="hover:text-indigo-600 flex items-center gap-1"><Pencil size={12}/> Upravit</button>
+                                              <button onClick={() => requestDeleteChild(child.id)} className="hover:text-red-600 flex items-center gap-1"><Trash2 size={12}/> Smazat</button>
+                                            </div>
                                           </div>
                                       )}
                                   </div>
                               </div>
-                              <div className="flex flex-col gap-1">
-                                <button onClick={() => openAllowanceSettings(child)} className="text-slate-400 hover:text-pink-500 transition-colors" title="Kapesné"><PiggyBank size={20} /></button>
-                                <button onClick={() => openScheduleModal(child)} className="text-slate-400 hover:text-teal-500 transition-colors" title="Kroužky"><Calendar size={20} /></button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4 mb-4">
+                              <div className="bg-yellow-50 p-3 rounded-lg text-center">
+                                  <span className="text-brand-yellow font-bold text-2xl block">{child.points}</span>
+                                  <span className="text-xs text-yellow-600 uppercase font-bold">Body</span>
+                              </div>
+                              <div className="bg-green-50 p-3 rounded-lg text-center cursor-pointer hover:bg-green-100 transition-colors" onClick={() => openPayoutModal(child)}>
+                                  <span className="text-brand-green font-bold text-2xl block">{child.balance} Kč</span>
+                                  <span className="text-xs text-green-600 uppercase font-bold">Kasička</span>
                               </div>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 mb-6"><div className="bg-indigo-50 p-3 rounded-lg text-center"><div className="text-xs text-indigo-400 font-semibold uppercase">Body</div><div className="text-2xl font-bold text-indigo-700">{child.points}</div></div><div className="bg-emerald-50 p-3 rounded-lg text-center"><div className="text-xs text-emerald-600 font-semibold uppercase">Kasička</div><div className="text-2xl font-bold text-emerald-700">{child.balance} Kč</div></div></div>
                         </div>
-                        <button onClick={() => openPayoutModal(child)} disabled={!child.balance || child.balance <= 0} className="w-full py-2 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg shadow-emerald-200"><Wallet size={16}/> Vyplatit odměnu</button>
+                        <div className="grid grid-cols-2 gap-2 mt-2 pt-4 border-t border-slate-100">
+                             <button onClick={() => openAllowanceSettings(child)} className="flex items-center justify-center gap-2 p-2 rounded-lg bg-gray-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 text-sm font-bold transition-colors">
+                                 <PiggyBank size={16}/> Kapesné
+                             </button>
+                             <button onClick={() => openScheduleModal(child)} className="flex items-center justify-center gap-2 p-2 rounded-lg bg-gray-50 text-slate-600 hover:bg-indigo-50 hover:text-indigo-600 text-sm font-bold transition-colors">
+                                 <Calendar size={16}/> Rozvrh
+                             </button>
+                        </div>
                     </div>
                 ))}
-                <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl flex flex-col items-center justify-center p-6 min-h-[300px] hover:border-indigo-400 hover:bg-indigo-50/30 transition-colors cursor-pointer">
-                    {isAddingChild ? (<form onSubmit={handleAddChild} className="w-full flex flex-col items-center gap-4"><h4 className="font-bold text-slate-700">Nové dítě</h4><input type="text" placeholder="Jméno" value={newChildName} onChange={e => setNewChildName(e.target.value)} className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" autoFocus /><input type="number" placeholder="Rok narození (např. 2015)" value={newChildBirthYear} onChange={e => setNewChildBirthYear(e.target.value)} className="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-800" /><div className="flex gap-2 w-full"><button type="button" onClick={() => setIsAddingChild(false)} className="flex-1 py-2 bg-gray-200 rounded-lg text-gray-600 font-medium">Zrušit</button><button type="submit" className="flex-1 py-2 bg-indigo-600 rounded-lg text-white font-bold">Přidat</button></div></form>) : (<button onClick={() => setIsAddingChild(true)} className="flex flex-col items-center gap-3 text-slate-400 hover:text-indigo-600"><div className="p-4 bg-white rounded-full shadow-sm"><Plus size={32}/></div><span className="font-medium">Přidat dítě</span></button>)}
+
+                <div className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center text-slate-400 hover:bg-white hover:border-indigo-300 transition-all cursor-pointer min-h-[300px]" onClick={() => setIsAddingChild(true)}>
+                    {isAddingChild ? (
+                        <form onSubmit={handleAddChild} className="w-full flex flex-col gap-3" onClick={e => e.stopPropagation()}>
+                            <h4 className="font-bold text-slate-700 text-center mb-2">Přidat dítě</h4>
+                            <input autoFocus type="text" placeholder="Jméno" className="w-full p-2 border rounded-lg" value={newChildName} onChange={e => setNewChildName(e.target.value)}/>
+                            <input type="number" placeholder="Rok narození (volitelné)" className="w-full p-2 border rounded-lg" value={newChildBirthYear} onChange={e => setNewChildBirthYear(e.target.value)}/>
+                            <div className="flex gap-2">
+                                <button type="submit" className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-bold">Přidat</button>
+                                <button type="button" onClick={() => setIsAddingChild(false)} className="bg-gray-200 text-gray-600 px-3 rounded-lg"><X size={20}/></button>
+                            </div>
+                        </form>
+                    ) : (
+                        <>
+                            <Plus size={48} className="mb-4 opacity-50"/>
+                            <span className="font-bold">Přidat člena rodiny</span>
+                        </>
+                    )}
                 </div>
             </div>
-            
-            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden"><div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row sm:justify-between sm:items-center bg-slate-50 gap-2"><h3 className="font-bold text-slate-700 flex items-center gap-2"><History size={18}/> Historie výplat</h3><span className="text-sm font-medium text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200 shadow-sm">Celkem vyplaceno: <span className="text-emerald-600 font-bold">{getTotalPayout()} Kč</span></span></div>{payoutHistory.length === 0 ? <div className="p-8 text-center text-slate-400 text-sm italic">Zatím neproběhly žádné výplaty.</div> : (<div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-xs"><tr><th className="p-4 font-medium">Datum</th><th className="p-4 font-medium">Dítě</th><th className="p-4 font-medium text-right">Částka</th></tr></thead><tbody className="divide-y divide-slate-100">{payoutHistory.map(record => {const childName = users.find(u => u.id === record.childId)?.name || 'Neznámé';return (<tr key={record.id} className="hover:bg-slate-50 transition-colors"><td className="p-4 text-slate-600 font-mono">{new Date(record.date).toLocaleDateString('cs-CZ')}</td><td className="p-4 font-bold text-slate-700 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 text-xs font-bold">{childName.charAt(0)}</div>{childName}</td><td className="p-4 text-right font-bold text-emerald-600">-{record.amount} Kč</td></tr>);})}</tbody></table></div>)}</div>
+
+            {/* Payout History Table */}
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><History size={20}/> Historie výplat</h3>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="text-slate-400 text-sm border-b border-slate-100">
+                                <th className="font-bold py-3 pl-2">Datum</th>
+                                <th className="font-bold py-3">Dítě</th>
+                                <th className="font-bold py-3">Typ</th>
+                                <th className="font-bold py-3">Poznámka</th>
+                                <th className="font-bold py-3 text-right pr-2">Částka</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {payoutHistory.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="text-center text-slate-400 py-8">Zatím žádné výplaty.</td>
+                                </tr>
+                            ) : (
+                                payoutHistory.map(record => {
+                                    const child = users.find(u => u.id === record.childId);
+                                    const isChildWithdrawal = record.type === 'CHILD';
+                                    
+                                    return (
+                                        <tr key={record.id} className="border-b border-slate-50 hover:bg-slate-50">
+                                            <td className="py-3 pl-2 text-slate-600 font-medium">{new Date(record.date).toLocaleDateString('cs-CZ')}</td>
+                                            <td className="py-3 text-slate-800 font-bold flex items-center gap-2">
+                                                <div className="w-6 h-6 rounded-full bg-slate-100 overflow-hidden">
+                                                    <AvatarDisplay user={child} />
+                                                </div>
+                                                {child?.name || 'Neznámé'}
+                                            </td>
+                                            <td className="py-3">
+                                                {isChildWithdrawal ? (
+                                                    <span className="inline-flex items-center gap-1 bg-orange-100 text-orange-700 text-xs px-2 py-1 rounded-full font-bold">
+                                                        <Baby size={12}/> Výběr
+                                                    </span>
+                                                ) : (
+                                                    <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-bold">
+                                                        <ShieldCheck size={12}/> Výplata
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="py-3 text-slate-500 italic text-sm">{record.note || '-'}</td>
+                                            <td className="py-3 pr-2 text-right font-bold text-brand-green">-{record.amount} Kč</td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
           </div>
         )}
 
-        {/* GAMES HISTORY TAB (New) */}
-        {activeTab === 'games' && (
-             <div className="max-w-5xl mx-auto animate-fade-in space-y-6">
-                 <h2 className="text-2xl font-bold text-slate-800">Historie Her (Stavitel Věže)</h2>
-                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                     {gameResults.length === 0 ? (
-                         <div className="p-12 text-center text-slate-400">
-                             <Gamepad2 size={48} className="mx-auto mb-4 opacity-50"/>
-                             <p>Zatím žádné odehrané hry.</p>
-                         </div>
-                     ) : (
-                         <div className="overflow-x-auto">
-                             <table className="w-full text-sm text-left">
-                                 <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-xs">
-                                     <tr>
-                                         <th className="p-4 font-medium">Datum</th>
-                                         <th className="p-4 font-medium">Dítě</th>
-                                         <th className="p-4 font-medium">Hra</th>
-                                         <th className="p-4 font-medium text-center">Věž (Pater)</th>
-                                         <th className="p-4 font-medium text-center">Správně</th>
-                                         <th className="p-4 font-medium text-center">Chyby</th>
-                                         <th className="p-4 font-medium text-right">Odměna</th>
-                                     </tr>
-                                 </thead>
-                                 <tbody className="divide-y divide-slate-100">
-                                     {gameResults.map(game => {
-                                         const childName = users.find(u => u.id === game.childId)?.name || 'Neznámé';
-                                         const isPerfect = game.incorrectCount === 0 && game.score > 0;
-                                         return (
-                                             <tr key={game.id} className="hover:bg-slate-50 transition-colors">
-                                                 <td className="p-4 text-slate-600 font-mono">{new Date(game.date).toLocaleString('cs-CZ')}</td>
-                                                 <td className="p-4 font-bold text-slate-700 flex items-center gap-2">
-                                                     <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center overflow-hidden">
-                                                        <AvatarDisplay user={users.find(u => u.id === game.childId)}/>
-                                                     </div>
-                                                     {childName}
-                                                 </td>
-                                                 <td className="p-4">
-                                                     <span className={`px-2 py-1 rounded text-xs font-bold ${game.category === 'MATH' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
-                                                         {game.category === 'MATH' ? 'Matematika' : 'Angličtina'}
-                                                     </span>
-                                                 </td>
-                                                 <td className="p-4 text-center font-bold text-slate-800">{game.score}</td>
-                                                 <td className="p-4 text-center text-green-600 font-medium">{game.correctCount}</td>
-                                                 <td className="p-4 text-center text-red-600 font-medium">{game.incorrectCount}</td>
-                                                 <td className="p-4 text-right">
-                                                     {game.rewardAmount > 0 ? (
-                                                         <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded">+{game.rewardAmount} Kč</span>
-                                                     ) : (
-                                                         <span className="text-slate-300">-</span>
-                                                     )}
-                                                 </td>
-                                             </tr>
-                                         );
-                                     })}
-                                 </tbody>
-                             </table>
-                         </div>
-                     )}
-                 </div>
-             </div>
-        )}
-
-        {/* TASKS MANAGEMENT TAB */}
+        {/* TASKS TAB */}
         {activeTab === 'tasks' && (
-           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in max-w-6xl mx-auto">
-              <div className="lg:col-span-1 space-y-6">
-                  {/* ... Create Task Form ... */}
-                  <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                      <h3 className="font-bold text-slate-800 mb-4">Nový úkol</h3>
-                      <form onSubmit={handleCreateTask} className="space-y-4">
-                          {/* ... inputs ... */}
-                          <div><label className="block text-sm font-medium text-slate-600 mb-1">Pro koho</label><div className="flex gap-2 overflow-x-auto pb-2"><button type="button" onClick={() => setSelectedChildId(ALL_CHILDREN_ID)} className={`flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${selectedChildId === ALL_CHILDREN_ID ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}><Users size={14} /> Všem</button>{children.map(child => (<button key={child.id} type="button" onClick={() => setSelectedChildId(child.id)} className={`flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${selectedChildId === child.id ? 'bg-indigo-600 text-white shadow-md' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{child.name}</button>))}</div></div>
-                          <div><label className="block text-sm font-medium text-slate-600 mb-1">Datum</label><input type="date" value={newTaskDate} onChange={(e) => setNewTaskDate(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800"/></div>
-                          <div><label className="block text-sm font-medium text-slate-600 mb-1">Název úkolu</label><input type="text" required value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" placeholder="např. Vynést koš"/></div>
-                          <div><label className="block text-sm font-medium text-slate-600 mb-1">Popis</label><textarea value={newTaskDesc} onChange={e => setNewTaskDesc(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" rows={2}/></div>
-                          <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-600 mb-1">Body</label><input type="number" min="0" value={newTaskPoints} onChange={e => setNewTaskPoints(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div><div><label className="block text-sm font-medium text-slate-600 mb-1">Kč</label><input type="number" min="0" value={newTaskMoney} onChange={e => setNewTaskMoney(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div></div>
-                          <div className="bg-slate-50 p-3 rounded-lg border border-slate-100"><div className="flex items-center gap-2 mb-2"><input type="checkbox" id="isRecurring" checked={isRecurring} onChange={(e) => setIsRecurring(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500"/><label htmlFor="isRecurring" className="text-sm font-medium text-slate-700 flex items-center gap-1"><Repeat size={14} /> Opakovat pravidelně</label></div>{isRecurring && (<div className="flex gap-2 pl-6"><button type="button" onClick={() => setRecurringFreq('DAILY')} className={`px-3 py-1 text-xs rounded-full border ${recurringFreq === 'DAILY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Denně</button><button type="button" onClick={() => setRecurringFreq('WEEKLY')} className={`px-3 py-1 text-xs rounded-full border ${recurringFreq === 'WEEKLY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Týdně</button></div>)}</div>
-                          <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold shadow-lg shadow-indigo-200 transition-all active:scale-95">{selectedChildId === ALL_CHILDREN_ID ? 'Přidělit všem' : 'Přidělit úkol'}</button>
-                      </form>
-                  </div>
-                  {/* ... AI Generator ... */}
-                  <div className="bg-gradient-to-br from-indigo-500 to-purple-600 p-6 rounded-xl shadow-lg text-white"><div className="flex items-center gap-2 mb-2"><Sparkles className="text-yellow-300" /><h3 className="font-bold text-lg">AI Inspirace</h3></div><p className="text-indigo-100 text-sm mb-4">Nech Gemini vymyslet úkoly na míru.</p><input type="text" placeholder="Co dítě baví? (např. Lego, dinosauři)" value={interests} onChange={e => setInterests(e.target.value)} className="w-full p-2 rounded-lg bg-white/20 border border-white/30 placeholder-indigo-200 text-white mb-3 focus:outline-none focus:bg-white/30"/><button onClick={handleGenerateIdeas} disabled={isGenerating || selectedChildId === ALL_CHILDREN_ID} className="w-full py-2 bg-white text-indigo-600 rounded-lg font-bold hover:bg-indigo-50 disabled:opacity-70">{isGenerating ? 'Generuji...' : selectedChildId === ALL_CHILDREN_ID ? 'Vyber konkrétní dítě' : 'Navrhnout úkoly'}</button>{generatedIdeas.length > 0 && (<div className="mt-4 space-y-2">{generatedIdeas.map((idea, idx) => (<div key={idx} onClick={() => applyIdea(idea)} className="bg-white/10 p-2 rounded hover:bg-white/20 cursor-pointer text-sm border border-white/10"><div className="font-bold">{idea.title}</div><div className="text-xs opacity-80">{idea.suggestedPoints} bodů</div></div>))}</div>)}</div>
-              </div>
+            <div className="max-w-4xl mx-auto space-y-6 animate-fade-in">
+                <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Správa úkolů</h2></div>
 
-              <div className="lg:col-span-2">
-                  {/* ... Active Tasks List ... */}
-                  <div className="flex justify-between items-center mb-4"><h3 className="font-bold text-slate-800">Aktivní úkoly {selectedChildId !== ALL_CHILDREN_ID && users.find(u => u.id === selectedChildId) ? `(${users.find(u => u.id === selectedChildId)?.name})` : '(Všichni)'}</h3></div>
-                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden"><div className="divide-y divide-slate-100">{tasks.filter(t => t.status === TaskStatus.TODO || t.status === TaskStatus.REJECTED).filter(t => selectedChildId === ALL_CHILDREN_ID || t.assignedToId === selectedChildId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(task => {const assignedChild = users.find(u => u.id === task.assignedToId); const isOverdue = task.date < todayStr; return (<div key={task.id} className={`p-4 hover:bg-slate-50 flex justify-between items-center group ${isOverdue ? 'bg-red-50' : ''}`}><div><div className="flex items-center gap-2"><span className={`text-xs font-bold px-2 py-0.5 rounded ${task.status === TaskStatus.REJECTED ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>{task.status === TaskStatus.REJECTED ? 'Vráceno' : 'Aktivní'}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> {task.recurringFrequency === 'WEEKLY' ? 'Týdně' : 'Denně'}</span>)}<span className={`text-xs flex items-center gap-1 ${isOverdue ? 'text-red-500 font-bold' : 'text-slate-400'}`}>{isOverdue && <AlertCircle size={10}/>}{new Date(task.date).toLocaleDateString('cs-CZ')}{isOverdue && " (Zpoždění)"}</span>{assignedChild && (<span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full flex items-center gap-1"><div className="w-3 h-3 bg-indigo-400 rounded-full"></div> {assignedChild.name}</span>)}</div><h4 className="font-bold text-slate-700 mt-1">{task.title}</h4><p className="text-sm text-slate-500">{task.description}</p></div><div className="text-right flex flex-col items-end gap-1"><div className="font-bold text-indigo-600">{task.rewardPoints} bodů</div>{task.rewardMoney > 0 && <div className="text-xs font-bold text-emerald-600">+{task.rewardMoney} Kč</div>}<div className="flex gap-2 mt-2"><button type="button" onClick={() => openEditTaskModal(task)} className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="Upravit"><Pencil size={16} /></button><button type="button" onClick={(e) => requestDeleteTask(e, task.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Smazat"><Trash2 size={16} /></button></div></div></div>);})}{tasks.filter(t => (t.status === TaskStatus.TODO || t.status === TaskStatus.REJECTED) && (selectedChildId === ALL_CHILDREN_ID || t.assignedToId === selectedChildId)).length === 0 && <div className="p-8 text-center text-slate-400">Žádné aktivní úkoly{selectedChildId !== ALL_CHILDREN_ID && ' pro vybrané dítě'}.</div>}</div></div>
-              </div>
-           </div>
+                {/* Add Task Form */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Sparkles className="text-brand-yellow"/> Nový úkol</h3>
+                    <form onSubmit={handleCreateTask} className="space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-bold text-slate-500 mb-1">Název úkolu</label>
+                                <input type="text" required className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" placeholder="např. Vynést odpadky" value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)}/>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-bold text-slate-500 mb-1">Popis (volitelné)</label>
+                                <textarea className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" rows={2} placeholder="Detailní popis co je třeba udělat..." value={newTaskDesc} onChange={e => setNewTaskDesc(e.target.value)}/>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-500 mb-1">Odměna (Body)</label>
+                                <input type="number" min="0" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={newTaskPoints} onChange={e => setNewTaskPoints(Number(e.target.value))}/>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-500 mb-1">Odměna (Kč)</label>
+                                <input type="number" min="0" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={newTaskMoney} onChange={e => setNewTaskMoney(Number(e.target.value))}/>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-500 mb-1">Pro koho</label>
+                                <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={selectedChildId} onChange={e => setSelectedChildId(e.target.value)}>
+                                    <option value={ALL_CHILDREN_ID}>Všechny děti</option>
+                                    {children.map(child => <option key={child.id} value={child.id}>{child.name}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-500 mb-1">Termín</label>
+                                <input type="date" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none" value={newTaskDate} onChange={e => setNewTaskDate(e.target.value)}/>
+                            </div>
+                            
+                            <div className="md:col-span-2 flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                                <div className="flex items-center gap-2">
+                                    <input type="checkbox" id="recurring" checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"/>
+                                    <label htmlFor="recurring" className="font-bold text-slate-700">Opakovat úkol</label>
+                                </div>
+                                {isRecurring && (
+                                    <select value={recurringFreq} onChange={e => setRecurringFreq(e.target.value as RecurringFrequency)} className="p-2 bg-white border border-slate-200 rounded-lg text-sm">
+                                        <option value="DAILY">Denně</option>
+                                        <option value="WEEKLY">Týdně</option>
+                                    </select>
+                                )}
+                            </div>
+                        </div>
+                        <button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md transition-all active:scale-95">Vytvořit úkol</button>
+                    </form>
+
+                    {/* Smart AI Generator */}
+                    <div className="mt-8 pt-6 border-t border-slate-100">
+                        <h4 className="font-bold text-sm text-slate-500 uppercase mb-3 flex items-center gap-2"><Sparkles size={16}/> AI Pomocník</h4>
+                        <div className="flex gap-2 mb-4">
+                            <input type="text" placeholder="Zájmy dítěte (např. vesmír, dinosauři, vaření)..." className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" value={interests} onChange={e => setInterests(e.target.value)}/>
+                            <button onClick={handleGenerateIdeas} disabled={isGenerating} className="px-6 py-3 bg-brand-yellow text-brand-dark font-bold rounded-xl hover:bg-yellow-400 disabled:opacity-70">
+                                {isGenerating ? 'Generuji...' : 'Navrhnout úkoly'}
+                            </button>
+                        </div>
+                        {generatedIdeas.length > 0 && (
+                            <div className="grid grid-cols-1 gap-3">
+                                {generatedIdeas.map((idea, idx) => (
+                                    <div key={idx} className="p-4 border border-indigo-100 bg-indigo-50 rounded-xl flex justify-between items-center cursor-pointer hover:bg-indigo-100 transition-colors" onClick={() => applyIdea(idea)}>
+                                        <div>
+                                            <h5 className="font-bold text-indigo-900">{idea.title}</h5>
+                                            <p className="text-xs text-indigo-700">{idea.description}</p>
+                                            <div className="flex gap-2 mt-1 text-xs font-bold text-indigo-500"><span>{idea.suggestedPoints} bodů</span><span>{idea.suggestedMoney} Kč</span></div>
+                                        </div>
+                                        <Plus className="text-indigo-500"/>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Task List */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4">Seznam aktivních úkolů</h3>
+                    <div className="space-y-3">
+                        {tasks.filter(t => t.status === TaskStatus.TODO).length === 0 ? (
+                            <p className="text-slate-400 text-center py-4">Žádné aktivní úkoly.</p>
+                        ) : (
+                            tasks.filter(t => t.status === TaskStatus.TODO).sort((a,b) => a.date.localeCompare(b.date)).map(task => (
+                                <div key={task.id} className="flex items-center justify-between p-4 border border-slate-100 rounded-xl hover:bg-slate-50 transition-colors group">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-3 h-3 rounded-full ${task.date < todayStr ? 'bg-red-500' : 'bg-green-500'}`}></div>
+                                        <div>
+                                            <h4 className="font-bold text-slate-800">{task.title}</h4>
+                                            <div className="text-xs text-slate-500 flex gap-2">
+                                                <span>Pro: {users.find(u => u.id === task.assignedToId)?.name}</span>
+                                                <span>Termín: {new Date(task.date).toLocaleDateString('cs-CZ')}</span>
+                                                {task.isRecurring && <span className="flex items-center gap-1 text-indigo-500"><Repeat size={10}/> {task.recurringFrequency === 'DAILY' ? 'Denně' : 'Týdně'}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => openEditTaskModal(task)} className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Pencil size={18}/></button>
+                                        <button onClick={(e) => requestDeleteTask(e, task.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg"><Trash2 size={18}/></button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
         )}
 
         {/* APPROVE TAB */}
         {activeTab === 'approve' && (
             <div className="max-w-4xl mx-auto animate-fade-in">
-                {/* ... existing approval list ... */}
-                <h2 className="text-2xl font-bold text-slate-800 mb-6">Úkoly ke schválení</h2>
+                <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-slate-800">Ke schválení ({pendingTasks.length})</h2></div>
+                
                 {pendingTasks.length === 0 ? (
-                    <div className="bg-white p-12 rounded-xl border border-dashed border-slate-300 text-center"><div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4"><Check className="text-green-500" size={32} /></div><h3 className="text-lg font-bold text-slate-700">Vše zkontrolováno!</h3><p className="text-slate-500">Žádné úkoly momentálně nečekají na schválení.</p></div>
+                    <div className="bg-white p-12 rounded-xl text-center text-slate-400 border border-slate-200">
+                        <CheckSquare size={48} className="mx-auto mb-4 opacity-20"/>
+                        <p className="text-lg">Vše zkontrolováno! Žádné úkoly nečekají na schválení.</p>
+                    </div>
                 ) : (
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4">
                         {pendingTasks.map(task => {
                             const child = users.find(u => u.id === task.assignedToId);
-                            const isOverdue = task.date < todayStr;
                             return (
-                                <div key={task.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6 relative">
-                                    {task.createdBy === UserRole.CHILD && (<div className="absolute top-4 right-4 flex gap-2"><div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div></div>)}
-                                    <div className="absolute top-4 right-4">{task.createdBy === UserRole.CHILD ? (<div className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1"><Sparkles size={12}/> Vlastní iniciativa</div>) : (<button type="button" onClick={(e) => requestDeleteTask(e, task.id)} className="text-slate-300 hover:text-red-500 p-1 transition-colors" title="Smazat úkol"><Trash2 size={16} /></button>)}</div>
-                                    <div className="w-full md:w-48 h-48 bg-slate-100 rounded-lg flex-shrink-0 overflow-hidden border border-slate-200">{task.proofImageUrl ? (<img src={task.proofImageUrl} alt="Důkaz" className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform" />) : (<div className="w-full h-full flex flex-col items-center justify-center text-slate-400"><span className="text-xs">Bez fotky</span></div>)}</div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-start mb-2"><div className="flex items-center gap-2">{child && (<div className="flex items-center gap-2 bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold"><div className="w-5 h-5 rounded-full overflow-hidden"><AvatarDisplay user={child}/></div>{child.name}</div>)}<span className={`text-sm ${isOverdue ? 'text-red-500 font-bold' : 'text-slate-400'}`}>{new Date(task.date).toLocaleDateString('cs-CZ')} {isOverdue && "(Zpoždění)"}</span>{task.isRecurring && (<span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded flex items-center gap-1 font-bold"><Repeat size={10} /> Opakující se</span>)}</div>{task.createdBy !== UserRole.CHILD && (<div className="text-right pr-8"><span className="block font-bold text-indigo-600 text-lg">+{task.rewardPoints} bodů</span>{task.rewardMoney > 0 && <span className="block text-sm font-bold text-emerald-600">+{task.rewardMoney} Kč</span>}</div>)}</div>
-                                        <h3 className="text-xl font-bold text-slate-800 mb-2">{task.title}</h3>
-                                        <p className="text-slate-600 mb-6 bg-slate-50 p-3 rounded-lg text-sm">{task.description || <em>Bez popisu</em>}</p>
-                                        
-                                        {isOverdue && (
-                                            <div className="mb-4 text-sm text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 flex items-center gap-2">
-                                                <AlertTriangle size={16}/>
-                                                <span>Úkol byl splněn po termínu. Automaticky se strhne <strong>{task.penalty || 5} bodů</strong>.</span>
+                                <div key={task.id} className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 flex flex-col md:flex-row gap-6">
+                                    {task.proofImageUrl && (
+                                        <div className="w-full md:w-1/3 h-48 bg-slate-100 rounded-xl overflow-hidden cursor-pointer" onClick={() => window.open(task.proofImageUrl, '_blank')}>
+                                            <img src={task.proofImageUrl} className="w-full h-full object-cover hover:scale-105 transition-transform" alt="Důkaz"/>
+                                        </div>
+                                    )}
+                                    <div className="flex-1 flex flex-col justify-between">
+                                        <div>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <span className="bg-yellow-100 text-yellow-800 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wide">Čeká na schválení</span>
+                                                <span className="text-slate-400 text-sm">{new Date(task.date).toLocaleDateString('cs-CZ')}</span>
                                             </div>
-                                        )}
+                                            <h3 className="text-xl font-bold text-slate-800 mb-1">{task.title}</h3>
+                                            <p className="text-slate-500 text-sm mb-4">{task.description}</p>
+                                            
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className="w-8 h-8 rounded-full bg-slate-100 overflow-hidden">
+                                                    <AvatarDisplay user={child} />
+                                                </div>
+                                                <span className="font-bold text-slate-700 text-sm">{child?.name}</span>
+                                            </div>
+                                        </div>
 
-                                        <div className="flex gap-3"><button onClick={() => handleReject(task.id)} className="flex-1 py-2 border border-red-200 text-red-600 rounded-lg font-bold hover:bg-red-50 transition-colors flex items-center justify-center gap-2"><X size={18} /> Vrátit k opravě</button><button onClick={() => initiateApproval(task)} className="flex-1 py-2 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 shadow-lg shadow-green-200 transition-colors flex items-center justify-center gap-2"><Check size={18} /> {task.createdBy === UserRole.CHILD ? 'Ohodnotit a Schválit' : 'Schválit splnění'}</button></div>
+                                        <div className="flex gap-3 mt-auto">
+                                            <button onClick={() => initiateApproval(task)} className="flex-1 bg-green-500 text-white py-3 rounded-xl font-bold hover:bg-green-600 shadow-md shadow-green-200 flex items-center justify-center gap-2">
+                                                <Check size={20}/> Schválit
+                                            </button>
+                                            <button onClick={() => handleReject(task.id)} className="flex-1 bg-red-100 text-red-600 py-3 rounded-xl font-bold hover:bg-red-200 flex items-center justify-center gap-2">
+                                                <X size={20}/> Zamítnout
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -669,103 +791,304 @@ const ParentDashboard: React.FC = () => {
             </div>
         )}
 
-        {/* SETTINGS TAB (Same as before) */}
+        {/* SETTINGS TAB */}
         {activeTab === 'settings' && (
-             <div className="max-w-4xl mx-auto animate-fade-in grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 h-fit">
-                     <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><Home className="text-indigo-600" /> Rodinný účet</h3><p className="text-slate-500 text-sm mb-6">Údaje pro přihlášení do aplikace.</p>
-                     <form onSubmit={handleFamilySettingsSave} className="space-y-4"><div><label className="block text-sm font-medium text-slate-600 mb-1">Název rodiny</label><input type="text" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" value={familyName} onChange={(e) => setFamilyName(e.target.value)}/></div><div><label className="block text-sm font-medium text-slate-600 mb-1">Email (Login)</label><input type="email" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" value={familyEmail} onChange={(e) => setFamilyEmail(e.target.value)}/></div><div><label className="block text-sm font-medium text-slate-600 mb-1">Heslo</label><div className="relative"><input type={showFamilyPassword ? "text" : "password"} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" placeholder="Změnit heslo..." value={familyPassword} onChange={(e) => setFamilyPassword(e.target.value)}/><button type="button" onClick={() => setShowFamilyPassword(!showFamilyPassword)} className="absolute right-3 top-3 text-slate-400 hover:text-indigo-600">{showFamilyPassword ? <EyeOff size={20}/> : <Eye size={20}/>}</button></div></div><button type="submit" className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all mt-4">Uložit rodinné údaje</button></form>
-                 </div>
-                 <div className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 h-fit">
-                     <h3 className="text-xl font-bold text-slate-800 mb-6 flex items-center gap-2"><UserCircle className="text-indigo-600" /> Profil rodiče</h3><p className="text-slate-500 text-sm mb-6">Nastavení vašeho osobního profilu.</p>
-                     <div className="flex items-center gap-4 mb-6"><div className="w-16 h-16 rounded-full border-2 border-slate-100 bg-slate-50 overflow-hidden"><AvatarDisplay user={currentUser} /></div><div className="text-xs w-full"><ImageUploader onImageSelected={setProfileAvatar} initialImage={profileAvatar} label="Změnit profilovku" /></div></div>
-                     <form onSubmit={handleProfileSettingsSave} className="space-y-4"><div><label className="block text-sm font-medium text-slate-600 mb-1">Jméno</label><input type="text" className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" value={profileName} onChange={(e) => setProfileName(e.target.value)}/></div><div><label className="block text-sm font-medium text-slate-600 mb-1">PIN profilu (4 čísla)</label><div className="relative"><input type={showProfilePin ? "text" : "password"} maxLength={4} className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800 tracking-widest font-mono" placeholder="####" value={profilePin} onChange={(e) => setProfilePin(e.target.value)}/><button type="button" onClick={() => setShowProfilePin(!showProfilePin)} className="absolute right-3 top-3 text-slate-400 hover:text-indigo-600">{showProfilePin ? <EyeOff size={20}/> : <Eye size={20}/>}</button></div><p className="text-xs text-slate-400 mt-1">Slouží pro přepnutí na tento profil.</p></div><button type="submit" className="w-full py-3 bg-indigo-50 text-indigo-700 font-bold rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-all mt-4">Uložit profil</button></form>
-                 </div>
-                 {settingsMessage && (<div className={`col-span-1 md:col-span-2 p-3 rounded-lg text-sm font-bold text-center ${settingsMessage.includes('Chyba') ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-600'}`}>{settingsMessage}</div>)}
-             </div>
-        )}
-
-        {/* Modals */}
-        {/* ... (Existing modals for Payout, Rating, Edit Task, Allowance, Delete Confirmation) ... */}
-        {payoutConfirmation && (
-          <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100">
-              <div className="flex items-center gap-4 mb-4"><div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 shadow-sm"><Wallet size={24} /></div><div><h3 className="text-xl font-bold text-slate-800">Potvrzení výplaty</h3><p className="text-slate-500 text-sm">Vyplacení kapesného</p></div></div>
-              <div className="bg-slate-50 p-5 rounded-xl border border-slate-200 mb-6"><p className="text-slate-600 mb-1 text-sm font-medium">Chystáte se vyplatit:</p><div className="flex justify-between items-end mb-4"><span className="font-bold text-slate-800 text-lg">{payoutConfirmation.name}</span><span className="font-bold text-emerald-600 text-3xl tracking-tight">{payoutConfirmation.amount} Kč</span></div><div className="flex items-start gap-2 bg-amber-50 text-amber-700 p-3 rounded-lg text-xs border border-amber-100"><AlertCircle size={14} className="mt-0.5 flex-shrink-0"/><p>Tato akce vytvoří záznam v historii a <strong>vynuluje aktuální stav kasičky</strong>.</p></div></div>
-              <div className="flex gap-3"><button onClick={() => setPayoutConfirmation(null)} className="flex-1 py-3 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors">Zrušit</button><button onClick={handleConfirmPayout} className="flex-1 py-3 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-colors flex items-center justify-center gap-2"><Check size={20} /> Vyplatit</button></div>
-            </div>
-          </div>
-        )}
-        
-        {ratingTask && (
-           <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-               <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100">
-                   <div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Sparkles className="text-orange-500"/> Ohodnotit úkol</h3><button onClick={() => setRatingTask(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button></div>
-                   <div className="mb-6"><div className="text-sm text-gray-500 mb-1">Název úkolu:</div><div className="font-bold text-lg text-slate-800 mb-2">{ratingTask.title}</div>{ratingTask.proofImageUrl && (<div className="h-32 w-full rounded-lg overflow-hidden border border-slate-200 mb-4"><img src={ratingTask.proofImageUrl} alt="Proof" className="w-full h-full object-cover" /></div>)}</div>
-                   <div className="grid grid-cols-2 gap-4 mb-6"><div><label className="block text-sm font-bold text-indigo-600 mb-2 flex items-center gap-1"><Star size={14}/> Body</label><input type="number" min="0" value={ratingPoints} onChange={(e) => setRatingPoints(Number(e.target.value))} className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-lg text-slate-800"/></div><div><label className="block text-sm font-bold text-emerald-600 mb-2 flex items-center gap-1"><Coins size={14}/> Peníze (Kč)</label><input type="number" min="0" value={ratingMoney} onChange={(e) => setRatingMoney(Number(e.target.value))} className="w-full p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none font-bold text-lg text-slate-800"/></div></div>
-                   <button onClick={confirmRating} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 flex items-center justify-center gap-2"><Check size={20} /> Potvrdit a připsat</button>
-               </div>
-           </div>
-        )}
-
-        {editingTask && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100 max-h-[90vh] overflow-y-auto">
-                    {/* ... (Same implementation for Edit Task) ... */}
-                    <div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Pencil className="text-indigo-500"/> Upravit úkol</h3><button onClick={() => setEditingTask(null)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button></div>
-                    <div className="space-y-5 mb-6">
-                        <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><UserCircle size={14}/> Pro koho</label><select value={editTaskAssignedTo} onChange={(e) => setEditTaskAssignedTo(e.target.value)} className="w-full p-2 border rounded-lg bg-slate-50 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500">{children.map(child => (<option key={child.id} value={child.id}>{child.name}</option>))}</select></div><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Calendar size={14}/> Datum</label><input type="date" value={editTaskDate} onChange={(e) => setEditTaskDate(e.target.value)} className="w-full p-2 border rounded-lg bg-slate-50 text-slate-800 text-sm focus:ring-2 focus:ring-indigo-500"/></div></div>
-                        <div><label className="block text-xs font-bold text-slate-500 mb-1">Název úkolu</label><input type="text" value={editTaskTitle} onChange={(e) => setEditTaskTitle(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800 font-bold"/></div>
-                        <div><label className="block text-xs font-bold text-slate-500 mb-1">Popis</label><textarea value={editTaskDesc} onChange={(e) => setEditTaskDesc(e.target.value)} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none text-slate-800" rows={2}/></div>
-                        <div className="grid grid-cols-2 gap-4"><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Star size={14}/> Body</label><input type="number" min="0" value={editTaskPoints} onChange={(e) => setEditTaskPoints(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div><div><label className="block text-xs font-bold text-slate-500 mb-1 flex items-center gap-1"><Coins size={14}/> Kč</label><input type="number" min="0" value={editTaskMoney} onChange={(e) => setEditTaskMoney(Number(e.target.value))} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 text-slate-800"/></div></div>
-                        <div><label className="block text-xs font-bold text-red-500 mb-1 flex items-center gap-1"><AlertTriangle size={14}/> Penále za nesplnění (body)</label><input type="number" min="0" value={editTaskPenalty} onChange={(e) => setEditTaskPenalty(Number(e.target.value))} className="w-full p-2 border border-red-200 bg-red-50 rounded-lg focus:ring-2 focus:ring-red-500 text-red-700"/><p className="text-[10px] text-gray-400 mt-1">Tyto body se odečtou (resp. nezískají), pokud je úkol splněn po termínu. Nastavte na 0 pro odpuštění.</p></div>
-                        <div className="bg-slate-50 p-3 rounded-lg border border-slate-200"><div className="flex items-center gap-2 mb-2"><input type="checkbox" id="editIsRecurring" checked={editTaskIsRecurring} onChange={(e) => setEditTaskIsRecurring(e.target.checked)} className="rounded text-indigo-600 focus:ring-indigo-500"/><label htmlFor="editIsRecurring" className="text-sm font-bold text-slate-700 flex items-center gap-1"><Repeat size={14} /> Opakovat pravidelně</label></div>{editTaskIsRecurring && (<div className="flex gap-2 pl-6"><button type="button" onClick={() => setEditTaskRecurringFreq('DAILY')} className={`px-3 py-1 text-xs rounded-full border transition-colors ${editTaskRecurringFreq === 'DAILY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Denně</button><button type="button" onClick={() => setEditTaskRecurringFreq('WEEKLY')} className={`px-3 py-1 text-xs rounded-full border transition-colors ${editTaskRecurringFreq === 'WEEKLY' ? 'bg-indigo-100 border-indigo-300 text-indigo-700 font-bold' : 'bg-white border-slate-200 text-slate-500'}`}>Týdně</button></div>)}</div>
+            <div className="max-w-2xl mx-auto space-y-6 animate-fade-in">
+                <div className="flex justify-between items-center"><h2 className="text-2xl font-bold text-slate-800">Nastavení</h2></div>
+                
+                {/* Theme Settings */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Palette size={20}/> Vzhled aplikace</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                         {[
+                            { id: 'DEFAULT', name: 'Výchozí', colors: ['#FFD166', '#118AB2', '#06D6A0'] },
+                            { id: 'SPACE', name: 'Vesmír', colors: ['#10002B', '#7B2CBF', '#F72585'] },
+                            { id: 'CANDY', name: 'Cukroví', colors: ['#FFB7B2', '#A2E1DB', '#E2F0CB'] },
+                            { id: 'FOREST', name: 'Les', colors: ['#2A9D8F', '#E9C46A', '#E76F51'] },
+                         ].map(theme => (
+                             <button 
+                                key={theme.id} 
+                                onClick={() => setTheme(theme.id as AppTheme)}
+                                className={`p-3 rounded-xl border-2 transition-all flex flex-col gap-2 ${currentTheme === theme.id ? 'border-brand-blue bg-blue-50' : 'border-gray-100 hover:bg-gray-50'}`}
+                             >
+                                 <div className="flex -space-x-2 justify-center">
+                                     {theme.colors.map((c, i) => (
+                                         <div key={i} className="w-6 h-6 rounded-full border-2 border-white shadow-sm" style={{ backgroundColor: c }}></div>
+                                     ))}
+                                 </div>
+                                 <span className="text-sm font-bold text-gray-700 text-center">{theme.name}</span>
+                             </button>
+                         ))}
                     </div>
-                    <div className="flex gap-3"><button onClick={(e) => requestDeleteTask(e, editingTask.id)} className="p-3 text-red-500 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-100" title="Smazat úkol"><Trash2 size={20} /></button><button onClick={handleSaveTaskChanges} disabled={!editTaskTitle.trim()} className="flex-1 py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50"><Save size={20} /> Uložit změny</button></div>
                 </div>
-            </div>
-        )}
 
-        {showAllowanceModal && (
-            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-fade-in">
-                <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl transform transition-all scale-100 border border-slate-100">
-                    <div className="flex items-center justify-between mb-6"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><PiggyBank className="text-pink-500"/> Nastavení kapesného</h3><button onClick={() => setShowAllowanceModal(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200"><X size={18} /></button></div>
-                    <div className="space-y-4 mb-6">
-                        <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-100"><label className="text-slate-700 font-bold">Povolit pravidelné kapesné</label><input type="checkbox" checked={allowanceEnabled} onChange={(e) => setAllowanceEnabled(e.target.checked)} className="w-5 h-5 text-indigo-600 rounded focus:ring-indigo-500"/></div>
-                        <div className={`space-y-4 transition-opacity ${allowanceEnabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                            <div className="grid grid-cols-2 gap-4"><div><label className="block text-sm font-medium text-slate-600 mb-1">Částka (Kč)</label><input type="number" value={allowanceAmount} onChange={(e) => setAllowanceAmount(Number(e.target.value))} className="w-full p-2 border rounded-lg text-slate-800 font-bold"/></div><div><label className="block text-sm font-medium text-slate-600 mb-1">Frekvence</label><select value={allowanceFreq} onChange={(e) => setAllowanceFreq(e.target.value as any)} className="w-full p-2 border rounded-lg text-slate-800 bg-white"><option value="WEEKLY">Týdně</option><option value="MONTHLY">Měsíčně</option></select></div></div>
-                            <div><label className="block text-sm font-medium text-slate-600 mb-1">{allowanceFreq === 'WEEKLY' ? 'Den v týdnu (1=Po, 7=Ne)' : 'Den v měsíci (1-31)'}</label><input type="number" min="1" max={allowanceFreq === 'WEEKLY' ? 7 : 31} value={allowanceDay} onChange={(e) => setAllowanceDay(Number(e.target.value))} className="w-full p-2 border rounded-lg text-slate-800"/></div>
-                            <div><label className="block text-sm font-medium text-slate-600 mb-1 flex items-center gap-1"><Star size={14} className="text-indigo-500"/> Cíl bodů pro plnou částku</label><input type="number" value={allowanceThreshold} onChange={(e) => setAllowanceThreshold(Number(e.target.value))} className="w-full p-2 border rounded-lg text-slate-800"/><p className="text-xs text-slate-400 mt-1">Pokud dítě nasbírá méně bodů, částka se poměrně sníží.</p></div>
+                {/* Family Settings */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><Home size={20}/> Rodinný účet</h3>
+                    <form onSubmit={handleFamilySettingsSave} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-500 mb-1">Název rodiny</label>
+                            <input type="text" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={familyName} onChange={e => setFamilyName(e.target.value)}/>
                         </div>
-                    </div>
-                    <button onClick={saveAllowanceSettings} className="w-full py-3 bg-indigo-600 text-white font-bold rounded-xl shadow-lg hover:bg-indigo-700 transition-all">Uložit nastavení</button>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-500 mb-1">Email (Login)</label>
+                            <input type="email" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={familyEmail} onChange={e => setFamilyEmail(e.target.value)}/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-500 mb-1">Heslo</label>
+                            <div className="relative">
+                                <input type={showFamilyPassword ? "text" : "password"} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={familyPassword} onChange={e => setFamilyPassword(e.target.value)}/>
+                                <button type="button" onClick={() => setShowFamilyPassword(!showFamilyPassword)} className="absolute right-3 top-3 text-slate-400">
+                                    {showFamilyPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                                </button>
+                            </div>
+                        </div>
+                        <button type="submit" className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Uložit změny</button>
+                    </form>
                 </div>
-            </div>
-        )}
 
-        {showScheduleModal && scheduleChildId && (
-            <ScheduleModal childId={scheduleChildId} onClose={() => setShowScheduleModal(false)} />
-        )}
-
-        {deleteTaskConfirmation.isOpen && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
-                <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
-                    <div className="flex flex-col items-center text-center mb-6"><div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500"><AlertTriangle size={32} /></div><h3 className="text-xl font-bold text-gray-800">Smazat tento úkol?</h3><p className="text-gray-500 mt-2 text-sm">Úkol bude trvale odstraněn.</p></div>
-                    <div className="flex gap-3"><button onClick={() => setDeleteTaskConfirmation({ isOpen: false, taskId: null })} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Ne, nechat</button><button onClick={confirmDeleteTask} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors">Ano, smazat</button></div>
+                {/* Parent Profile */}
+                <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2"><UserCircle size={20}/> Můj profil (Rodič)</h3>
+                    <form onSubmit={handleProfileSettingsSave} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-bold text-slate-500 mb-1">Jméno</label>
+                            <input type="text" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={profileName} onChange={e => setProfileName(e.target.value)}/>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-500 mb-1">PIN (pro přepínání profilů)</label>
+                            <div className="relative">
+                                <input type={showProfilePin ? "text" : "password"} maxLength={4} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={profilePin} onChange={e => setProfilePin(e.target.value)} placeholder="****"/>
+                                <button type="button" onClick={() => setShowProfilePin(!showProfilePin)} className="absolute right-3 top-3 text-slate-400">
+                                    {showProfilePin ? <EyeOff size={20}/> : <Eye size={20}/>}
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-bold text-slate-500 mb-2">Avatar</label>
+                            <ImageUploader onImageSelected={setProfileAvatar} initialImage={profileAvatar} label=""/>
+                        </div>
+                        <button type="submit" className="px-6 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700">Uložit profil</button>
+                    </form>
                 </div>
-            </div>
-        )}
 
-        {deleteChildConfirmation.isOpen && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-fade-in">
-                <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
-                    <div className="flex flex-col items-center text-center mb-6"><div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500"><AlertTriangle size={32} /></div><h3 className="text-xl font-bold text-gray-800">Smazat profil dítěte?</h3><p className="text-gray-500 mt-2 text-sm">Všechna data (body, historie) budou ztracena.</p></div>
-                    <div className="flex gap-3"><button onClick={() => setDeleteChildConfirmation({ isOpen: false, childId: null })} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-colors">Zrušit</button><button onClick={confirmDeleteChild} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600 transition-colors">Smazat profil</button></div>
-                </div>
+                {settingsMessage && <div className="p-4 bg-green-100 text-green-700 rounded-xl text-center font-bold">{settingsMessage}</div>}
             </div>
         )}
 
       </main>
+
+      {/* MODALS */}
+      
+      {/* Payout Confirmation */}
+      {payoutConfirmation && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
+                  <h3 className="text-xl font-bold text-slate-800 mb-2">Potvrdit výplatu</h3>
+                  <p className="text-slate-500 mb-4">Opravdu chceš vyplatit <span className="font-bold text-green-600">{payoutConfirmation.amount} Kč</span> pro {payoutConfirmation.name}?</p>
+                  
+                  <div className="mb-6">
+                      <label className="block text-sm font-bold text-slate-500 mb-1">Poznámka (volitelné)</label>
+                      <input 
+                        type="text" 
+                        placeholder="např. Kapesné na výlet" 
+                        value={payoutNote} 
+                        onChange={(e) => setPayoutNote(e.target.value)}
+                        className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800"
+                      />
+                  </div>
+
+                  <p className="text-xs text-slate-400 mb-6 bg-slate-50 p-3 rounded-lg">Tímto se vynuluje stav "Kasičky" v aplikaci. Peníze musíte předat fyzicky.</p>
+                  <div className="flex gap-3">
+                      <button onClick={() => setPayoutConfirmation(null)} className="flex-1 py-3 bg-slate-100 font-bold text-slate-600 rounded-xl hover:bg-slate-200">Zrušit</button>
+                      <button onClick={handleConfirmPayout} className="flex-1 py-3 bg-green-500 font-bold text-white rounded-xl hover:bg-green-600 shadow-lg shadow-green-200">Vyplatit</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Rating Modal for Custom Tasks */}
+      {ratingTask && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
+                  <h3 className="text-xl font-bold text-slate-800 mb-4">Ohodnotit úkol</h3>
+                  <p className="text-sm text-slate-500 mb-4">Dítě splnilo vlastní úkol: <strong>{ratingTask.title}</strong>. Kolik bodů si zaslouží?</p>
+                  
+                  <div className="space-y-4 mb-6">
+                      <div>
+                          <label className="block text-sm font-bold text-slate-500 mb-1">Body</label>
+                          <input type="number" className="w-full p-3 border rounded-xl" value={ratingPoints} onChange={e => setRatingPoints(Number(e.target.value))}/>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-bold text-slate-500 mb-1">Peníze (Kč)</label>
+                          <input type="number" className="w-full p-3 border rounded-xl" value={ratingMoney} onChange={e => setRatingMoney(Number(e.target.value))}/>
+                      </div>
+                  </div>
+                  <div className="flex gap-3">
+                      <button onClick={() => setRatingTask(null)} className="flex-1 py-3 bg-slate-100 font-bold text-slate-600 rounded-xl hover:bg-slate-200">Zrušit</button>
+                      <button onClick={confirmRating} className="flex-1 py-3 bg-green-500 font-bold text-white rounded-xl hover:bg-green-600 shadow-lg shadow-green-200">Schválit</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Edit Task Modal */}
+      {editingTask && (
+            <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
+                  <h3 className="text-xl font-bold text-slate-800 mb-4">Upravit úkol</h3>
+                  <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-500 mb-1">Název</label>
+                          <input type="text" className="w-full p-3 border rounded-xl" value={editTaskTitle} onChange={e => setEditTaskTitle(e.target.value)}/>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-bold text-slate-500 mb-1">Popis</label>
+                          <textarea className="w-full p-3 border rounded-xl" value={editTaskDesc} onChange={e => setEditTaskDesc(e.target.value)}/>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-sm font-bold text-slate-500 mb-1">Body</label>
+                              <input type="number" className="w-full p-3 border rounded-xl" value={editTaskPoints} onChange={e => setEditTaskPoints(Number(e.target.value))}/>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-bold text-slate-500 mb-1">Peníze</label>
+                              <input type="number" className="w-full p-3 border rounded-xl" value={editTaskMoney} onChange={e => setEditTaskMoney(Number(e.target.value))}/>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="block text-sm font-bold text-slate-500 mb-1">Penále (po termínu)</label>
+                              <input type="number" className="w-full p-3 border rounded-xl" value={editTaskPenalty} onChange={e => setEditTaskPenalty(Number(e.target.value))}/>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-bold text-slate-500 mb-1">Termín</label>
+                              <input type="date" className="w-full p-3 border rounded-xl" value={editTaskDate} onChange={e => setEditTaskDate(e.target.value)}/>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                          <div className="flex items-center gap-2">
+                              <input type="checkbox" id="editRecurring" checked={editTaskIsRecurring} onChange={e => setEditTaskIsRecurring(e.target.checked)} className="w-5 h-5 rounded text-indigo-600"/>
+                              <label htmlFor="editRecurring" className="font-bold text-slate-700">Opakovat</label>
+                          </div>
+                          {editTaskIsRecurring && (
+                              <select value={editTaskRecurringFreq} onChange={e => setEditTaskRecurringFreq(e.target.value as RecurringFrequency)} className="p-2 bg-white border border-slate-200 rounded-lg text-sm">
+                                  <option value="DAILY">Denně</option>
+                                  <option value="WEEKLY">Týdně</option>
+                              </select>
+                          )}
+                      </div>
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                      <button onClick={() => setEditingTask(null)} className="flex-1 py-3 bg-slate-100 font-bold text-slate-600 rounded-xl hover:bg-slate-200">Zrušit</button>
+                      <button onClick={handleSaveTaskChanges} className="flex-1 py-3 bg-indigo-600 font-bold text-white rounded-xl hover:bg-indigo-700 shadow-lg">Uložit</button>
+                  </div>
+              </div>
+            </div>
+      )}
+
+      {/* Allowance Modal */}
+      {showAllowanceModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in">
+                  <h3 className="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2"><PiggyBank className="text-pink-500"/> Nastavení kapesného</h3>
+                  
+                  <div className="flex items-center gap-3 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200">
+                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${allowanceEnabled ? 'bg-green-500' : 'bg-slate-300'}`} onClick={() => setAllowanceEnabled(!allowanceEnabled)}>
+                            <div className={`w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${allowanceEnabled ? 'translate-x-6' : ''}`}></div>
+                        </div>
+                        <span className="font-bold text-slate-700">{allowanceEnabled ? 'Zapnuto' : 'Vypnuto'}</span>
+                  </div>
+
+                  {allowanceEnabled && (
+                      <div className="space-y-4">
+                          <div>
+                              <label className="block text-sm font-bold text-slate-500 mb-1">Částka (Kč)</label>
+                              <input type="number" className="w-full p-3 border rounded-xl" value={allowanceAmount} onChange={e => setAllowanceAmount(Number(e.target.value))}/>
+                          </div>
+                          <div className="grid grid-cols-2 gap-4">
+                              <div>
+                                  <label className="block text-sm font-bold text-slate-500 mb-1">Frekvence</label>
+                                  <select className="w-full p-3 border rounded-xl" value={allowanceFreq} onChange={e => setAllowanceFreq(e.target.value as any)}>
+                                      <option value="WEEKLY">Týdně</option>
+                                      <option value="MONTHLY">Měsíčně</option>
+                                  </select>
+                              </div>
+                              <div>
+                                  <label className="block text-sm font-bold text-slate-500 mb-1">{allowanceFreq === 'WEEKLY' ? 'Den v týdnu' : 'Den v měsíci'}</label>
+                                  {allowanceFreq === 'WEEKLY' ? (
+                                      <select className="w-full p-3 border rounded-xl" value={allowanceDay} onChange={e => setAllowanceDay(Number(e.target.value))}>
+                                          <option value={1}>Pondělí</option>
+                                          <option value={5}>Pátek</option>
+                                          <option value={7}>Neděle</option>
+                                      </select>
+                                  ) : (
+                                      <input type="number" min={1} max={28} className="w-full p-3 border rounded-xl" value={allowanceDay} onChange={e => setAllowanceDay(Number(e.target.value))}/>
+                                  )}
+                              </div>
+                          </div>
+                          <div>
+                              <label className="block text-sm font-bold text-slate-500 mb-1">Hranice bodů pro 100%</label>
+                              <div className="flex gap-2">
+                                  <input type="number" className="w-full p-3 border rounded-xl" value={allowanceThreshold} onChange={e => setAllowanceThreshold(Number(e.target.value))}/>
+                                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-center"><Star size={16} className="text-yellow-500"/></div>
+                              </div>
+                              <p className="text-xs text-slate-400 mt-1">Pokud dítě získá méně bodů, dostane poměrnou část.</p>
+                          </div>
+                      </div>
+                  )}
+
+                  <div className="flex gap-3 mt-6">
+                      <button onClick={() => setShowAllowanceModal(false)} className="flex-1 py-3 bg-slate-100 font-bold text-slate-600 rounded-xl hover:bg-slate-200">Zrušit</button>
+                      <button onClick={saveAllowanceSettings} className="flex-1 py-3 bg-indigo-600 font-bold text-white rounded-xl hover:bg-indigo-700 shadow-lg">Uložit</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* Schedule Modal */}
+      {showScheduleModal && scheduleChildId && (
+          <ScheduleModal childId={scheduleChildId} onClose={() => setShowScheduleModal(false)} />
+      )}
+
+      {/* Delete Child Confirmation */}
+      {deleteChildConfirmation.isOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                  <div className="flex flex-col items-center text-center mb-6">
+                      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                          <AlertTriangle size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800">Smazat dítě?</h3>
+                      <p className="text-gray-500 mt-2 text-sm">Opravdu chcete smazat tento profil a všechna data? Tato akce je nevratná.</p>
+                  </div>
+                  <div className="flex gap-3">
+                      <button onClick={() => setDeleteChildConfirmation({ isOpen: false, childId: null })} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200">Zrušit</button>
+                      <button onClick={confirmDeleteChild} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600">Smazat</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+       {/* Delete Task Confirmation */}
+       {deleteTaskConfirmation.isOpen && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl animate-scale-in border border-red-100">
+                  <div className="flex flex-col items-center text-center mb-6">
+                      <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mb-4 text-red-500">
+                          <Trash2 size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-gray-800">Smazat úkol?</h3>
+                      <p className="text-gray-500 mt-2 text-sm">Opravdu chcete odstranit tento úkol?</p>
+                  </div>
+                  <div className="flex gap-3">
+                      <button onClick={() => setDeleteTaskConfirmation({ isOpen: false, taskId: null })} className="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200">Zrušit</button>
+                      <button onClick={confirmDeleteTask} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl shadow-lg shadow-red-200 hover:bg-red-600">Smazat</button>
+                  </div>
+              </div>
+          </div>
+      )}
+
     </div>
   );
 };

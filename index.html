@@ -6,6 +6,24 @@
     <title>Úkolníček</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        /* Default Theme (Playful) - RGB values for Tailwind opacity support */
+        --brand-yellow: 255 209 102; /* #FFD166 */
+        --brand-blue: 17 138 178;    /* #118AB2 */
+        --brand-green: 6 214 160;    /* #06D6A0 */
+        --brand-red: 239 71 111;     /* #EF476F */
+        --brand-dark: 7 59 76;       /* #073B4C */
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+      }
+      h1, h2, h3, h4, h5, h6 {
+        font-family: 'Fredoka', sans-serif;
+      }
+    </style>
     <script>
       tailwind.config = {
         theme: {
@@ -15,25 +33,16 @@
               display: ['Fredoka', 'sans-serif'],
             },
             colors: {
-              'brand-yellow': '#FFD166',
-              'brand-blue': '#118AB2',
-              'brand-green': '#06D6A0',
-              'brand-red': '#EF476F',
-              'brand-dark': '#073B4C',
+              'brand-yellow': 'rgb(var(--brand-yellow) / <alpha-value>)',
+              'brand-blue': 'rgb(var(--brand-blue) / <alpha-value>)',
+              'brand-green': 'rgb(var(--brand-green) / <alpha-value>)',
+              'brand-red': 'rgb(var(--brand-red) / <alpha-value>)',
+              'brand-dark': 'rgb(var(--brand-dark) / <alpha-value>)',
             }
           }
         }
       }
     </script>
-    <style>
-      body {
-        font-family: 'Inter', sans-serif;
-        background-color: #f8fafc;
-      }
-      h1, h2, h3, h4, h5, h6 {
-        font-family: 'Fredoka', sans-serif;
-      }
-    </style>
 <script type="importmap">
 {
   "imports": {

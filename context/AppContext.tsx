@@ -1,6 +1,5 @@
-
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
-import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, GameResult, Pet, PetType, PetStage, CalendarEvent } from '../types';
+import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, CalendarEvent, AppTheme } from '../types';
 import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
@@ -20,9 +19,8 @@ interface AppContextType {
   payoutHistory: PayoutRecord[];
   goals: Goal[];
   notifications: AppNotification[];
-  gameResults: GameResult[];
-  pets: Pet[];
   calendarEvents: CalendarEvent[];
+  currentTheme: AppTheme;
   
   // Auth Methods
   loginFamily: (email: string, password: string) => Promise<{success: boolean, error?: string}>;
@@ -43,7 +41,8 @@ interface AppContextType {
   addChild: (name: string, birthYear?: number) => void;
   updateChild: (id: string, name: string, avatarUrl?: string, pin?: string, birthYear?: number) => void;
   deleteChild: (id: string) => void;
-  processPayout: (childId: string) => void;
+  processPayout: (childId: string, note?: string) => void;
+  createWithdrawal: (childId: string, amount: number, note?: string) => Promise<boolean>;
   convertPointsToMoney: (childId: string, pointsToConvert: number) => void;
   updateFamilyProfile: (familyName: string, email: string, password?: string) => Promise<{success: boolean, error?: string}>;
   updateUserPin: (userId: string, pin: string) => Promise<{success: boolean, error?: string}>;
@@ -53,13 +52,10 @@ interface AppContextType {
   updateGoal: (id: string, updates: Partial<Goal>) => void;
   deleteGoal: (id: string) => Promise<void>;
   checkAndClaimDailyReward: (userId: string) => Promise<boolean>;
-  saveGameResult: (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH') => Promise<{ isNewRecord: boolean, reward: number, pointsEarned: number }>;
   markNotificationRead: (id: string) => void;
   
-  // Pet Methods
-  adoptPet: (type: PetType, name: string) => Promise<void>;
-  feedPet: (petId: string) => Promise<{success: boolean, message: string}>;
-  playWithPet: (petId: string) => Promise<{success: boolean, message: string}>;
+  // Theme
+  setTheme: (theme: AppTheme) => void;
 
   // Calendar Methods
   addCalendarEvent: (event: CalendarEvent) => Promise<void>;
@@ -67,6 +63,39 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+// --- THEME DEFINITIONS ---
+// Values are RGB triplets (e.g. "255 0 0")
+const THEMES: Record<AppTheme, { yellow: string; blue: string; green: string; red: string; dark: string }> = {
+  DEFAULT: {
+    yellow: '255 209 102', // #FFD166
+    blue: '17 138 178',    // #118AB2
+    green: '6 214 160',    // #06D6A0
+    red: '239 71 111',     // #EF476F
+    dark: '7 59 76',       // #073B4C
+  },
+  SPACE: {
+    yellow: '255 215 0',   // Gold
+    blue: '123 44 191',    // Deep Purple
+    green: '76 201 240',   // Cyan (Neon)
+    red: '247 37 133',     // Neon Pink
+    dark: '16 0 43',       // Very Dark Purple
+  },
+  CANDY: {
+    yellow: '255 183 178', // Pastel Peach/Pink
+    blue: '162 225 219',   // Pastel Teal
+    green: '226 240 203',  // Pastel Lime
+    red: '255 154 162',    // Pastel Rose
+    dark: '111 88 128',    // Muted Purple
+  },
+  FOREST: {
+    yellow: '233 196 106', // Sand/Gold
+    blue: '42 157 143',    // Teal Green
+    green: '116 198 157',  // Soft Green
+    red: '231 111 81',     // Burnt Orange
+    dark: '38 70 83',      // Dark Slate
+  }
+};
 
 // --- DB MAPPERS ---
 const mapUserFromDb = (u: any): User => ({
@@ -77,16 +106,14 @@ const mapUserFromDb = (u: any): User => ({
   role: u.role as UserRole,
   avatarUrl: u.avatar_url,
   points: u.points,
-  petPoints: u.pet_points || 0,
   balance: u.balance,
   password: u.password,
   pin: u.pin || '', 
   familyName: u.family_name,
   allowanceSettings: u.allowance_settings,
   lastLoginRewardDate: u.last_login_reward_date,
+  lastAllowanceDate: u.last_allowance_date,
   createdAt: u.created_at,
-  towerHighScoreMath: u.tower_high_score_math || 0,
-  towerHighScoreEnglish: u.tower_high_score_english || 0,
   birthYear: u.birth_year
 });
 
@@ -98,15 +125,13 @@ const mapUserToDb = (u: User) => ({
   role: u.role,
   avatar_url: u.avatarUrl,
   points: u.points,
-  pet_points: u.petPoints,
   balance: u.balance,
   password: u.password,
   pin: u.pin,
   family_name: u.familyName,
   allowance_settings: u.allowanceSettings,
   last_login_reward_date: u.lastLoginRewardDate,
-  tower_high_score_math: u.towerHighScoreMath,
-  tower_high_score_english: u.towerHighScoreEnglish,
+  last_allowance_date: u.lastAllowanceDate,
   birth_year: u.birthYear
 });
 
@@ -151,7 +176,19 @@ const mapPayoutFromDb = (p: any): PayoutRecord => ({
   familyId: p.family_id,
   childId: p.child_id,
   amount: p.amount,
-  date: p.date
+  date: p.date,
+  note: p.note,
+  type: p.type || 'PARENT' // Default to parent for old records
+});
+
+const mapPayoutToDb = (p: PayoutRecord) => ({
+  id: p.id,
+  family_id: p.familyId,
+  child_id: p.childId,
+  amount: p.amount,
+  date: p.date,
+  note: p.note,
+  type: p.type
 });
 
 const mapGoalFromDb = (g: any): Goal => ({
@@ -161,31 +198,6 @@ const mapGoalFromDb = (g: any): Goal => ({
   title: g.title,
   targetAmount: g.target_amount,
   imageUrl: g.image_url
-});
-
-const mapGameResultFromDb = (r: any): GameResult => ({
-  id: r.id,
-  familyId: r.family_id,
-  childId: r.child_id,
-  category: r.category,
-  score: r.score,
-  correctCount: r.correct_count,
-  incorrectCount: r.incorrect_count,
-  rewardAmount: r.reward_amount,
-  date: r.created_at
-});
-
-const mapPetFromDb = (p: any): Pet => ({
-  id: p.id,
-  familyId: p.family_id,
-  childId: p.child_id,
-  name: p.name,
-  type: p.type as PetType,
-  stage: p.stage,
-  health: p.health,
-  happiness: p.happiness,
-  experience: p.experience,
-  lastInteraction: p.last_interaction
 });
 
 const mapCalendarEventFromDb = (e: any): CalendarEvent => ({
@@ -200,6 +212,16 @@ const mapCalendarEventFromDb = (e: any): CalendarEvent => ({
     specificDate: e.specific_date
 });
 
+const mapNotificationFromDb = (n: any): AppNotification => ({
+    id: n.id,
+    familyId: n.family_id,
+    recipientId: n.recipient_id,
+    message: n.message,
+    type: n.type,
+    isRead: n.is_read,
+    createdAt: n.created_at
+});
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Auth State
   const [familyId, setFamilyId] = useState<string | null>(null);
@@ -211,9 +233,38 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [payoutHistory, setPayoutHistory] = useState<PayoutRecord[]>([]);
   const [goals, setGoals] = useState<Goal[]>([]);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
-  const [gameResults, setGameResults] = useState<GameResult[]>([]);
-  const [pets, setPets] = useState<Pet[]>([]);
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+
+  // Theme State
+  const [currentTheme, setCurrentThemeState] = useState<AppTheme>('DEFAULT');
+
+  // --- THEME LOGIC ---
+  const applyTheme = (theme: AppTheme) => {
+      const colors = THEMES[theme];
+      const root = document.documentElement;
+      
+      root.style.setProperty('--brand-yellow', colors.yellow);
+      root.style.setProperty('--brand-blue', colors.blue);
+      root.style.setProperty('--brand-green', colors.green);
+      root.style.setProperty('--brand-red', colors.red);
+      root.style.setProperty('--brand-dark', colors.dark);
+  };
+
+  const setTheme = (theme: AppTheme) => {
+      setCurrentThemeState(theme);
+      applyTheme(theme);
+      localStorage.setItem('ukolnicek_theme', theme);
+  };
+
+  useEffect(() => {
+      // Load theme from storage
+      const storedTheme = localStorage.getItem('ukolnicek_theme') as AppTheme;
+      if (storedTheme && THEMES[storedTheme]) {
+          setTheme(storedTheme);
+      } else {
+          applyTheme('DEFAULT');
+      }
+  }, []);
 
   // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
@@ -234,6 +285,116 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   }, [users]);
 
+  // --- AUTOMATIC ALLOWANCE LOGIC ---
+  const processAutomaticAllowances = async (usersData: User[], tasksData: Task[]) => {
+      let updatedUsers = [...usersData];
+      let hasChanges = false;
+
+      for (const user of updatedUsers) {
+          if (user.role === UserRole.CHILD && user.allowanceSettings) {
+              const { amount, frequency, day, pointThreshold } = user.allowanceSettings;
+              const now = new Date();
+              const todayStr = now.toISOString().split('T')[0];
+              
+              // Determine if payment is due today or past due
+              let isDue = false;
+              let periodStart = new Date();
+
+              if (frequency === 'MONTHLY') {
+                  // If today is the set day or later in current month
+                  if (now.getDate() >= day) {
+                      // Check if already paid this month
+                      const lastPaid = user.lastAllowanceDate ? new Date(user.lastAllowanceDate) : new Date(0);
+                      // If last payment was in a previous month (or never)
+                      if (lastPaid.getMonth() !== now.getMonth() || lastPaid.getFullYear() !== now.getFullYear()) {
+                          isDue = true;
+                          periodStart = new Date(now.getFullYear(), now.getMonth() - 1, day);
+                      }
+                  }
+              } else if (frequency === 'WEEKLY') {
+                  // Convert 1-7 (Mon-Sun) to JS 0-6 (Sun-Sat) logic or just check day index
+                  const currentDayIndex = now.getDay() || 7; // 1 (Mon) - 7 (Sun)
+                  
+                  if (currentDayIndex >= day) {
+                      // Check if paid this week (Monday based week)
+                      const lastPaid = user.lastAllowanceDate ? new Date(user.lastAllowanceDate) : new Date(0);
+                      
+                      // Calculate start of current week
+                      const startOfWeek = new Date(now);
+                      startOfWeek.setDate(now.getDate() - currentDayIndex + 1);
+                      startOfWeek.setHours(0,0,0,0);
+
+                      if (lastPaid < startOfWeek) {
+                          isDue = true;
+                          periodStart = new Date(now);
+                          periodStart.setDate(periodStart.getDate() - 7);
+                      }
+                  }
+              }
+
+              if (isDue) {
+                  // Calculate Amount
+                  const periodStartStr = periodStart.toISOString().split('T')[0];
+                  const earnedPoints = tasksData
+                      .filter(t => 
+                          t.assignedToId === user.id && 
+                          t.status === TaskStatus.APPROVED && 
+                          t.date >= periodStartStr
+                      )
+                      .reduce((sum, t) => sum + t.rewardPoints, 0);
+
+                  const percentage = pointThreshold > 0 ? Math.min(1, earnedPoints / pointThreshold) : 1;
+                  const payAmount = Math.floor(amount * percentage);
+
+                  if (payAmount > 0) {
+                      // UPDATE USER
+                      const newBalance = (user.balance || 0) + payAmount;
+                      
+                      // Update Local State
+                      user.balance = newBalance;
+                      user.lastAllowanceDate = todayStr;
+                      hasChanges = true;
+
+                      // DB Updates
+                      await supabase.from('users').update({ 
+                          balance: newBalance,
+                          last_allowance_date: todayStr 
+                      }).eq('id', user.id);
+
+                      // Create Notification
+                      const notifId = Math.random().toString(36).substr(2, 9);
+                      const notification: AppNotification = {
+                          id: notifId,
+                          familyId: user.familyId,
+                          recipientId: user.id,
+                          message: `Cink! Přišlo kapesné ${payAmount} Kč! 💰`,
+                          type: 'ALLOWANCE_PAID',
+                          isRead: false,
+                          createdAt: new Date().toISOString()
+                      };
+                      setNotifications(prev => [notification, ...prev]);
+                      await supabase.from('notifications').insert({
+                          id: notifId,
+                          family_id: user.familyId,
+                          recipient_id: user.id,
+                          message: notification.message,
+                          type: notification.type,
+                          is_read: false
+                      });
+                  }
+              }
+          }
+      }
+
+      if (hasChanges) {
+          setUsers(updatedUsers);
+          if (currentUser) {
+              const updatedCurrent = updatedUsers.find(u => u.id === currentUser.id);
+              if (updatedCurrent) setCurrentUser(updatedCurrent);
+          }
+      }
+  };
+
   // --- FETCH DATA ---
   const fetchData = useCallback(async () => {
     if (!familyId) {
@@ -241,16 +402,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setTasks([]);
         setPayoutHistory([]);
         setGoals([]);
-        setGameResults([]);
-        setPets([]);
         setCalendarEvents([]);
         return;
     }
 
     try {
       const { data: usersData } = await supabase.from('users').select('*').eq('family_id', familyId);
+      let mappedUsers: User[] = [];
       if (usersData) {
-          const mappedUsers = usersData.map(mapUserFromDb);
+          mappedUsers = usersData.map(mapUserFromDb);
           setUsers(mappedUsers);
           if (currentUser) {
               const updatedCurrent = mappedUsers.find(u => u.id === currentUser.id);
@@ -259,7 +419,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
 
       const { data: tasksData } = await supabase.from('tasks').select('*').eq('family_id', familyId);
-      if (tasksData) setTasks(tasksData.map(mapTaskFromDb));
+      const mappedTasks = tasksData ? tasksData.map(mapTaskFromDb) : [];
+      setTasks(mappedTasks);
 
       const { data: payoutsData } = await supabase.from('payout_history').select('*').eq('family_id', familyId).order('date', { ascending: false });
       if (payoutsData) setPayoutHistory(payoutsData.map(mapPayoutFromDb));
@@ -267,40 +428,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const { data: goalsData } = await supabase.from('goals').select('*').eq('family_id', familyId);
       if (goalsData) setGoals(goalsData.map(mapGoalFromDb));
 
-      const { data: gamesData } = await supabase.from('game_results').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
-      if (gamesData) setGameResults(gamesData.map(mapGameResultFromDb));
-
       const { data: eventsData } = await supabase.from('calendar_events').select('*').eq('family_id', familyId);
       if (eventsData) setCalendarEvents(eventsData.map(mapCalendarEventFromDb));
+      
+      const { data: notifData } = await supabase.from('notifications').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
+      if (notifData) setNotifications(notifData.map(mapNotificationFromDb));
 
-      const { data: petsData } = await supabase.from('pets').select('*').eq('family_id', familyId);
-      if (petsData) {
-          const mappedPets = petsData.map(mapPetFromDb);
-          
-          // Check for stats decay
-          const updatedPets = await Promise.all(mappedPets.map(async (pet) => {
-              const now = new Date();
-              const lastInteraction = new Date(pet.lastInteraction);
-              const diffHours = (now.getTime() - lastInteraction.getTime()) / (1000 * 3600);
-              
-              // Decrease stats if more than 1 hour passed
-              if (diffHours >= 1) {
-                  const decay = Math.floor(diffHours) * 5; // -5 stats per hour
-                  const newHealth = Math.max(0, pet.health - decay);
-                  const newHappiness = Math.max(0, pet.happiness - decay);
-                  
-                  if (newHealth !== pet.health || newHappiness !== pet.happiness) {
-                      await supabase.from('pets').update({
-                          health: newHealth,
-                          happiness: newHappiness
-                      }).eq('id', pet.id);
-                      return { ...pet, health: newHealth, happiness: newHappiness };
-                  }
-              }
-              return pet;
-          }));
-          
-          setPets(updatedPets);
+      // Check for Allowances after loading data
+      if (mappedUsers.length > 0) {
+          await processAutomaticAllowances(mappedUsers, mappedTasks);
       }
 
     } catch (error) {
@@ -543,7 +679,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     await supabase.from('users').delete().eq('id', id);
   };
 
-  const processPayout = async (childId: string) => {
+  const processPayout = async (childId: string, note?: string) => {
     const child = users.find(u => u.id === childId);
     if (!child || !child.balance || child.balance <= 0) return;
 
@@ -552,7 +688,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       familyId: familyId!,
       childId,
       amount: child.balance,
-      date: new Date().toISOString()
+      date: new Date().toISOString(),
+      note,
+      type: 'PARENT'
     };
 
     setPayoutHistory(prev => [record, ...prev]);
@@ -560,16 +698,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev => prev.map(u => u.id === childId ? updatedUser : u));
     if (currentUser?.id === childId) setCurrentUser(updatedUser);
 
-    await supabase.from('payout_history').insert(mapPayoutFromDb({
-        id: record.id,
-        family_id: record.familyId,
-        child_id: record.childId,
-        amount: record.amount,
-        date: record.date
-    }));
+    await supabase.from('payout_history').insert(mapPayoutToDb(record));
 
     await supabase.from('users').update({ balance: 0 }).eq('id', childId);
     fetchData();
+  };
+
+  const createWithdrawal = async (childId: string, amount: number, note?: string): Promise<boolean> => {
+      const child = users.find(u => u.id === childId);
+      if (!child || !child.balance || child.balance < amount || amount <= 0) return false;
+
+      const newBalance = child.balance - amount;
+      
+      const record: PayoutRecord = {
+          id: Math.random().toString(36).substr(2, 9),
+          familyId: familyId!,
+          childId,
+          amount: amount,
+          date: new Date().toISOString(),
+          note: note,
+          type: 'CHILD'
+      };
+
+      // Update State
+      setPayoutHistory(prev => [record, ...prev]);
+      const updatedUser = { ...child, balance: newBalance };
+      setUsers(prev => prev.map(u => u.id === childId ? updatedUser : u));
+      if (currentUser?.id === childId) setCurrentUser(updatedUser);
+
+      // Update DB
+      await supabase.from('payout_history').insert(mapPayoutToDb(record));
+
+      await supabase.from('users').update({ balance: newBalance }).eq('id', childId);
+      return true;
   };
 
   const convertPointsToMoney = async (childId: string, pointsToConvert: number) => {
@@ -580,12 +741,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const moneyToAdd = Math.floor(pointsToConvert / 10);
     const newPoints = (user.points || 0) - pointsToConvert;
     const newBalance = (user.balance || 0) + moneyToAdd;
+    
+    // 1. Update User State & DB
     const updates = { points: newPoints, balance: newBalance };
 
     setUsers(prev => prev.map(u => u.id === childId ? { ...u, ...updates } : u));
     if (currentUser?.id === childId) setCurrentUser({ ...currentUser, ...updates });
 
     await supabase.from('users').update(updates).eq('id', childId);
+
+    // 2. Create History Record (as a Task)
+    const exchangeTask: Task = {
+        id: Math.random().toString(36).substr(2, 9),
+        familyId: familyId!,
+        title: 'Směna bodů',
+        description: `Výměna ${pointsToConvert} bodů za ${moneyToAdd} Kč`,
+        rewardPoints: -pointsToConvert, // Negative to show cost in history
+        rewardMoney: moneyToAdd,
+        assignedToId: childId,
+        date: new Date().toISOString().split('T')[0],
+        status: TaskStatus.APPROVED, // Automatically approved
+        createdBy: UserRole.CHILD
+    };
+
+    setTasks(prev => [...prev, exchangeTask]);
+    await supabase.from('tasks').insert(mapTaskToDb(exchangeTask));
   };
 
   const updateUserPin = async (userId: string, pin: string) => {
@@ -757,209 +937,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return true;
   };
   
-  const saveGameResult = async (score: number, correct: number, incorrect: number, category: 'MATH' | 'ENGLISH'): Promise<{ isNewRecord: boolean, reward: number, pointsEarned: number }> => {
-      if (!currentUser || !familyId) return { isNewRecord: false, reward: 0, pointsEarned: 0 };
-      
-      const currentHigh = category === 'MATH' ? (currentUser.towerHighScoreMath || 0) : (currentUser.towerHighScoreEnglish || 0);
-      let isNewRecord = false;
-      let rewardMoney = 0;
-      
-      const pointsEarned = correct; // 1 point per correct answer
-
-      if (score > currentHigh) {
-          isNewRecord = true;
-      }
-
-      if (isNewRecord && incorrect === 0 && score > 0) {
-          rewardMoney = 10;
-      }
-
-      const userUpdates: Partial<User> = {};
-      const dbUpdates: any = {};
-
-      if (isNewRecord) {
-          if (category === 'MATH') {
-             userUpdates.towerHighScoreMath = score;
-             dbUpdates.tower_high_score_math = score;
-          } else {
-             userUpdates.towerHighScoreEnglish = score;
-             dbUpdates.tower_high_score_english = score;
-          }
-      }
-      
-      if (rewardMoney > 0) {
-          const newBalance = (currentUser.balance || 0) + rewardMoney;
-          userUpdates.balance = newBalance;
-          dbUpdates.balance = newBalance;
-      }
-      
-      if (pointsEarned > 0) {
-          // Points from games go to Pet Points (Energy)
-          const newPetPoints = (currentUser.petPoints || 0) + pointsEarned;
-          userUpdates.petPoints = newPetPoints;
-          dbUpdates.pet_points = newPetPoints;
-      }
-
-      const result: GameResult = {
-          id: Math.random().toString(36).substr(2, 9),
-          familyId,
-          childId: currentUser.id,
-          category,
-          score,
-          correctCount: correct,
-          incorrectCount: incorrect,
-          rewardAmount: rewardMoney,
-          date: new Date().toISOString()
-      };
-      setGameResults(prev => [result, ...prev]);
-      
-      await supabase.from('game_results').insert({
-          id: result.id,
-          family_id: result.familyId,
-          child_id: result.childId,
-          category: result.category,
-          score: result.score,
-          correct_count: result.correctCount,
-          incorrect_count: result.incorrectCount,
-          reward_amount: result.rewardAmount
-      });
-
-      if (Object.keys(userUpdates).length > 0) {
-          const updatedUser = { ...currentUser, ...userUpdates };
-          setCurrentUser(updatedUser);
-          setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, ...userUpdates } : u));
-          
-          await supabase.from('users').update(dbUpdates).eq('id', currentUser.id);
-      }
-
-      return { isNewRecord, reward: rewardMoney, pointsEarned };
-  };
-
   const markNotificationRead = (id: string) => {
       // Placeholder
   };
   
-  // --- PET LOGIC ---
-
-  const adoptPet = async (type: PetType, name: string) => {
-      if (!currentUser || !familyId) return;
-      
-      const newPet: Pet = {
-          id: Math.random().toString(36).substr(2, 9),
-          familyId,
-          childId: currentUser.id,
-          name,
-          type,
-          stage: PetStage.EGG,
-          health: 100,
-          happiness: 100,
-          experience: 0,
-          lastInteraction: new Date().toISOString()
-      };
-      
-      setPets(prev => [...prev, newPet]);
-      await supabase.from('pets').insert({
-          id: newPet.id,
-          family_id: newPet.familyId,
-          child_id: newPet.childId,
-          name: newPet.name,
-          type: newPet.type,
-          stage: newPet.stage,
-          health: newPet.health,
-          happiness: newPet.happiness,
-          experience: newPet.experience,
-          last_interaction: newPet.lastInteraction
-      });
-  };
-
-  const feedPet = async (petId: string): Promise<{success: boolean, message: string}> => {
-      if (!currentUser) return { success: false, message: 'Not logged in' };
-      const pet = pets.find(p => p.id === petId);
-      if (!pet) return { success: false, message: 'Pet not found' };
-
-      const cost = 10;
-      // CHECK: Pet Points
-      if ((currentUser.petPoints || 0) < cost) {
-          return { success: false, message: 'Nedostatek energie (Cena: 10)' };
-      }
-
-      const newHealth = Math.min(100, pet.health + 20);
-      const now = new Date().toISOString();
-
-      // Deduct Pet Points (Energy)
-      const newPetPoints = (currentUser.petPoints || 0) - cost;
-      setCurrentUser(prev => prev ? { ...prev, petPoints: newPetPoints } : null);
-      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, petPoints: newPetPoints } : u));
-      await supabase.from('users').update({ pet_points: newPetPoints }).eq('id', currentUser.id);
-
-      // Check for level up
-      const newXP = pet.experience + 5;
-      let nextStage = pet.stage;
-      
-      if (newXP >= 100) {
-          nextStage = pet.stage + 1;
-          await evolvePet(petId, nextStage);
-          await updatePetStats(petId, { health: newHealth, lastInteraction: now }); // Stats updated in evolve too, but ensure health
-          return { success: true, message: `Mňam! Vyrostl jsem na úroveň ${nextStage}!` };
-      } else {
-          await updatePetStats(petId, { health: newHealth, experience: newXP, lastInteraction: now });
-          return { success: true, message: 'Mňam! To bylo dobré.' };
-      }
-  };
-
-  const playWithPet = async (petId: string): Promise<{success: boolean, message: string}> => {
-      if (!currentUser) return { success: false, message: 'Not logged in' };
-      const pet = pets.find(p => p.id === petId);
-      if (!pet) return { success: false, message: 'Pet not found' };
-
-      const cost = 5;
-       // CHECK: Pet Points
-       if ((currentUser.petPoints || 0) < cost) {
-          return { success: false, message: 'Nedostatek energie (Cena: 5)' };
-      }
-
-      const newHappiness = Math.min(100, pet.happiness + 20);
-      const now = new Date().toISOString();
-
-      // Deduct Pet Points (Energy)
-      const newPetPoints = (currentUser.petPoints || 0) - cost;
-      setCurrentUser(prev => prev ? { ...prev, petPoints: newPetPoints } : null);
-      setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, petPoints: newPetPoints } : u));
-      await supabase.from('users').update({ pet_points: newPetPoints }).eq('id', currentUser.id);
-
-      // Check for level up
-      const newXP = pet.experience + 10;
-      let nextStage = pet.stage;
-
-      if (newXP >= 100) {
-          nextStage = pet.stage + 1;
-          await evolvePet(petId, nextStage);
-          await updatePetStats(petId, { happiness: newHappiness, lastInteraction: now });
-          return { success: true, message: `Jupí! Vyrostl jsem na úroveň ${nextStage}!` };
-      } else {
-          await updatePetStats(petId, { happiness: newHappiness, experience: newXP, lastInteraction: now });
-          return { success: true, message: 'To byla zábava!' };
-      }
-  };
-
-  const updatePetStats = async (petId: string, updates: Partial<Pet>) => {
-      setPets(prev => prev.map(p => p.id === petId ? { ...p, ...updates } : p));
-      
-      const dbUpdates: any = {};
-      if (updates.health !== undefined) dbUpdates.health = updates.health;
-      if (updates.happiness !== undefined) dbUpdates.happiness = updates.happiness;
-      if (updates.experience !== undefined) dbUpdates.experience = updates.experience;
-      if (updates.lastInteraction !== undefined) dbUpdates.last_interaction = updates.lastInteraction;
-      if (updates.stage !== undefined) dbUpdates.stage = updates.stage;
-
-      await supabase.from('pets').update(dbUpdates).eq('id', petId);
-  };
-
-  const evolvePet = async (petId: string, newStage: number) => {
-      // Reset XP to 0 on level up
-      await updatePetStats(petId, { stage: newStage, experience: 0 });
-  };
-
   // --- CALENDAR LOGIC ---
 
   const addCalendarEvent = async (event: CalendarEvent) => {
@@ -993,9 +974,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       payoutHistory,
       goals,
       notifications,
-      gameResults,
-      pets,
       calendarEvents,
+      currentTheme,
       loginFamily,
       registerFamily,
       selectProfile,
@@ -1013,6 +993,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateChild,
       deleteChild,
       processPayout,
+      createWithdrawal,
       convertPointsToMoney,
       updateFamilyProfile,
       updateUserPin,
@@ -1022,13 +1003,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateGoal,
       deleteGoal,
       checkAndClaimDailyReward,
-      saveGameResult,
       markNotificationRead,
-      adoptPet,
-      feedPet,
-      playWithPet,
       addCalendarEvent,
-      deleteCalendarEvent
+      deleteCalendarEvent,
+      setTheme
     }}>
       {children}
     </AppContext.Provider>
