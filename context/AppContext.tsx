@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
 import { User, Task, TaskStatus, UserRole, PayoutRecord, Goal, RecurringFrequency, AllowanceSettings, AppNotification, CalendarEvent, AppTheme } from '../types';
-import { supabase } from '../services/supabaseClient';
 
 interface AllowanceProgress {
   totalAmount: number;
@@ -28,7 +27,7 @@ interface AppContextType {
   selectProfile: (userId: string) => void;
   logout: () => void;
   logoutFamily: () => void;
-
+  
   // Data Methods
   refreshData: () => Promise<void>;
   addTask: (task: Task) => void;
@@ -65,7 +64,6 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 // --- THEME DEFINITIONS ---
-// Values are RGB triplets (e.g. "255 0 0")
 const THEMES: Record<AppTheme, { yellow: string; blue: string; green: string; red: string; dark: string }> = {
   DEFAULT: {
     yellow: '255 209 102', // #FFD166
@@ -96,131 +94,6 @@ const THEMES: Record<AppTheme, { yellow: string; blue: string; green: string; re
     dark: '38 70 83',      // Dark Slate
   }
 };
-
-// --- DB MAPPERS ---
-const mapUserFromDb = (u: any): User => ({
-  id: u.id,
-  familyId: u.family_id,
-  email: u.email,
-  name: u.name,
-  role: u.role as UserRole,
-  avatarUrl: u.avatar_url,
-  points: u.points,
-  balance: u.balance,
-  password: u.password,
-  pin: u.pin || '', 
-  familyName: u.family_name,
-  allowanceSettings: u.allowance_settings,
-  lastLoginRewardDate: u.last_login_reward_date,
-  lastAllowanceDate: u.last_allowance_date,
-  createdAt: u.created_at,
-  birthYear: u.birth_year
-});
-
-const mapUserToDb = (u: User) => ({
-  id: u.id,
-  family_id: u.familyId,
-  email: u.email,
-  name: u.name,
-  role: u.role,
-  avatar_url: u.avatarUrl,
-  points: u.points,
-  balance: u.balance,
-  password: u.password,
-  pin: u.pin,
-  family_name: u.familyName,
-  allowance_settings: u.allowanceSettings,
-  last_login_reward_date: u.lastLoginRewardDate,
-  last_allowance_date: u.lastAllowanceDate,
-  birth_year: u.birthYear
-});
-
-const mapTaskFromDb = (t: any): Task => ({
-  id: t.id,
-  familyId: t.family_id,
-  title: t.title,
-  description: t.description,
-  rewardPoints: t.reward_points,
-  rewardMoney: t.reward_money,
-  assignedToId: t.assigned_to_id,
-  date: t.date,
-  status: t.status as TaskStatus,
-  proofImageUrl: t.proof_image_url,
-  feedback: t.feedback,
-  createdBy: t.created_by as UserRole,
-  isRecurring: t.is_recurring,
-  recurringFrequency: t.recurring_frequency,
-  penalty: t.penalty !== undefined ? t.penalty : 5
-});
-
-const mapTaskToDb = (t: Task) => ({
-  id: t.id,
-  family_id: t.familyId,
-  title: t.title,
-  description: t.description,
-  reward_points: t.rewardPoints,
-  reward_money: t.rewardMoney,
-  assigned_to_id: t.assignedToId,
-  date: t.date,
-  status: t.status,
-  proof_image_url: t.proofImageUrl,
-  feedback: t.feedback,
-  created_by: t.createdBy,
-  is_recurring: t.isRecurring,
-  recurring_frequency: t.recurringFrequency,
-  penalty: t.penalty
-});
-
-const mapPayoutFromDb = (p: any): PayoutRecord => ({
-  id: p.id,
-  familyId: p.family_id,
-  childId: p.child_id,
-  amount: p.amount,
-  date: p.date,
-  note: p.note,
-  type: p.type || 'PARENT' // Default to parent for old records
-});
-
-const mapPayoutToDb = (p: PayoutRecord) => ({
-  id: p.id,
-  family_id: p.familyId,
-  child_id: p.childId,
-  amount: p.amount,
-  date: p.date,
-  note: p.note,
-  type: p.type
-});
-
-const mapGoalFromDb = (g: any): Goal => ({
-  id: g.id,
-  familyId: g.family_id,
-  childId: g.child_id,
-  title: g.title,
-  targetAmount: g.target_amount,
-  imageUrl: g.image_url
-});
-
-const mapCalendarEventFromDb = (e: any): CalendarEvent => ({
-    id: e.id,
-    familyId: e.family_id,
-    childId: e.child_id,
-    title: e.title,
-    dayIndex: e.day_index,
-    time: e.time,
-    color: e.color,
-    isRecurring: e.is_recurring !== false, // Default true for backward compatibility
-    specificDate: e.specific_date
-});
-
-const mapNotificationFromDb = (n: any): AppNotification => ({
-    id: n.id,
-    familyId: n.family_id,
-    recipientId: n.recipient_id,
-    message: n.message,
-    type: n.type,
-    isRead: n.is_read,
-    createdAt: n.created_at
-});
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Auth State
@@ -268,7 +141,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // --- PERSISTENCE: Restore Session on Mount ---
   useEffect(() => {
-      // Family ID persists forever (until logout) -> localStorage
       const storedFamilyId = localStorage.getItem('ukolnicek_family_id');
       if (storedFamilyId) {
           setFamilyId(storedFamilyId);
@@ -277,7 +149,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Restore Current User once Users are loaded
   useEffect(() => {
-      // User ID persists only for the SESSION (until tab close) -> sessionStorage
       const storedUserId = sessionStorage.getItem('ukolnicek_user_id');
       if (storedUserId && users.length > 0 && !currentUser) {
           const user = users.find(u => u.id === storedUserId);
@@ -296,30 +167,23 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               const now = new Date();
               const todayStr = now.toISOString().split('T')[0];
               
-              // Determine if payment is due today or past due
               let isDue = false;
               let periodStart = new Date();
 
               if (frequency === 'MONTHLY') {
-                  // If today is the set day or later in current month
                   if (now.getDate() >= day) {
-                      // Check if already paid this month
                       const lastPaid = user.lastAllowanceDate ? new Date(user.lastAllowanceDate) : new Date(0);
-                      // If last payment was in a previous month (or never)
                       if (lastPaid.getMonth() !== now.getMonth() || lastPaid.getFullYear() !== now.getFullYear()) {
                           isDue = true;
                           periodStart = new Date(now.getFullYear(), now.getMonth() - 1, day);
                       }
                   }
               } else if (frequency === 'WEEKLY') {
-                  // Convert 1-7 (Mon-Sun) to JS 0-6 (Sun-Sat) logic or just check day index
                   const currentDayIndex = now.getDay() || 7; // 1 (Mon) - 7 (Sun)
                   
                   if (currentDayIndex >= day) {
-                      // Check if paid this week (Monday based week)
                       const lastPaid = user.lastAllowanceDate ? new Date(user.lastAllowanceDate) : new Date(0);
                       
-                      // Calculate start of current week
                       const startOfWeek = new Date(now);
                       startOfWeek.setDate(now.getDate() - currentDayIndex + 1);
                       startOfWeek.setHours(0,0,0,0);
@@ -333,7 +197,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
               }
 
               if (isDue) {
-                  // Calculate Amount
                   const periodStartStr = periodStart.toISOString().split('T')[0];
                   const earnedPoints = tasksData
                       .filter(t => 
@@ -347,21 +210,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                   const payAmount = Math.floor(amount * percentage);
 
                   if (payAmount > 0) {
-                      // UPDATE USER
                       const newBalance = (user.balance || 0) + payAmount;
                       
-                      // Update Local State
                       user.balance = newBalance;
                       user.lastAllowanceDate = todayStr;
                       hasChanges = true;
 
-                      // DB Updates
-                      await supabase.from('users').update({ 
-                          balance: newBalance,
-                          last_allowance_date: todayStr 
-                      }).eq('id', user.id);
-
-                      // Create Notification
                       const notifId = Math.random().toString(36).substr(2, 9);
                       const notification: AppNotification = {
                           id: notifId,
@@ -373,14 +227,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                           createdAt: new Date().toISOString()
                       };
                       setNotifications(prev => [notification, ...prev]);
-                      await supabase.from('notifications').insert({
-                          id: notifId,
-                          family_id: user.familyId,
-                          recipient_id: user.id,
-                          message: notification.message,
-                          type: notification.type,
-                          is_read: false
-                      });
+
+                      // Sync with Backend (combines balance, date, and notification)
+                      try {
+                          await fetch(`/api/users/${user.id}/allowance-pay`, {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                  balance: newBalance,
+                                  lastAllowanceDate: todayStr,
+                                  notification: {
+                                      id: notifId,
+                                      familyId: user.familyId,
+                                      recipientId: user.id,
+                                      message: notification.message,
+                                      type: notification.type,
+                                      isRead: false
+                                  }
+                              })
+                          });
+                      } catch (err) {
+                          console.error('Failed to sync automatic allowance payment:', err);
+                      }
                   }
               }
           }
@@ -395,7 +263,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
   };
 
-  // --- FETCH DATA ---
+  // --- FETCH DATA FROM BACKEND ---
   const fetchData = useCallback(async () => {
     if (!familyId) {
         setUsers([]);
@@ -403,42 +271,30 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setPayoutHistory([]);
         setGoals([]);
         setCalendarEvents([]);
+        setNotifications([]);
         return;
     }
 
     try {
-      const { data: usersData } = await supabase.from('users').select('*').eq('family_id', familyId);
-      let mappedUsers: User[] = [];
-      if (usersData) {
-          mappedUsers = usersData.map(mapUserFromDb);
-          setUsers(mappedUsers);
-          if (currentUser) {
-              const updatedCurrent = mappedUsers.find(u => u.id === currentUser.id);
-              if (updatedCurrent) setCurrentUser(updatedCurrent);
-          }
-      }
-
-      const { data: tasksData } = await supabase.from('tasks').select('*').eq('family_id', familyId);
-      const mappedTasks = tasksData ? tasksData.map(mapTaskFromDb) : [];
-      setTasks(mappedTasks);
-
-      const { data: payoutsData } = await supabase.from('payout_history').select('*').eq('family_id', familyId).order('date', { ascending: false });
-      if (payoutsData) setPayoutHistory(payoutsData.map(mapPayoutFromDb));
-
-      const { data: goalsData } = await supabase.from('goals').select('*').eq('family_id', familyId);
-      if (goalsData) setGoals(goalsData.map(mapGoalFromDb));
-
-      const { data: eventsData } = await supabase.from('calendar_events').select('*').eq('family_id', familyId);
-      if (eventsData) setCalendarEvents(eventsData.map(mapCalendarEventFromDb));
+      const res = await fetch(`/api/data?familyId=${familyId}`);
+      if (!res.ok) throw new Error('Failed to fetch data');
+      const data = await res.json();
       
-      const { data: notifData } = await supabase.from('notifications').select('*').eq('family_id', familyId).order('created_at', { ascending: false });
-      if (notifData) setNotifications(notifData.map(mapNotificationFromDb));
-
-      // Check for Allowances after loading data
-      if (mappedUsers.length > 0) {
-          await processAutomaticAllowances(mappedUsers, mappedTasks);
+      setUsers(data.users || []);
+      if (currentUser) {
+          const updatedCurrent = (data.users || []).find((u: any) => u.id === currentUser.id);
+          if (updatedCurrent) setCurrentUser(updatedCurrent);
       }
+      setTasks(data.tasks || []);
+      setPayoutHistory(data.payoutHistory || []);
+      setGoals(data.goals || []);
+      setCalendarEvents(data.calendarEvents || []);
+      setNotifications(data.notifications || []);
 
+      // Check for automatic allowances
+      if (data.users && data.users.length > 0) {
+          await processAutomaticAllowances(data.users, data.tasks || []);
+      }
     } catch (error) {
       console.error("Failed to fetch data", error);
     }
@@ -453,20 +309,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const loginFamily = async (email: string, password: string) => {
       try {
-          const { data, error } = await supabase
-            .from('users')
-            .select('family_id')
-            .eq('email', email)
-            .eq('password', password)
-            .eq('role', UserRole.PARENT)
-            .maybeSingle();
-
-          if (data && !error) {
-              setFamilyId(data.family_id);
-              localStorage.setItem('ukolnicek_family_id', data.family_id);
+          const res = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email, password })
+          });
+          const data = await res.json();
+          if (data.success && data.familyId) {
+              setFamilyId(data.familyId);
+              localStorage.setItem('ukolnicek_family_id', data.familyId);
               return { success: true };
           } else {
-              return { success: false, error: 'Nesprávný email nebo heslo.' };
+              return { success: false, error: data.error || 'Nesprávný email nebo heslo.' };
           }
       } catch (e) {
           return { success: false, error: 'Chyba připojení' };
@@ -475,31 +329,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const registerFamily = async (email: string, password: string, familyName: string) => {
     try {
-        const { data: existing } = await supabase.from('users').select('id').eq('email', email).maybeSingle();
-        if (existing) return { success: false, error: 'Email již existuje.' };
-
-        const familyId = Math.random().toString(36).substr(2, 9);
-        const parentId = Math.random().toString(36).substr(2, 9);
-
-        const newParent: User = {
-            id: parentId,
-            familyId,
-            email,
-            name: 'Rodič', 
-            role: UserRole.PARENT,
-            password, 
-            pin: '',
-            familyName,
-            avatarUrl: ''
-        };
-
-        const { error } = await supabase.from('users').insert(mapUserToDb(newParent));
-        
-        if (!error) {
-            return { success: true };
-        } else {
-            return { success: false, error: error.message || 'Registrace se nezdařila' };
-        }
+        const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password, familyName })
+        });
+        const data = await res.json();
+        return data;
     } catch (e) {
         return { success: false, error: 'Chyba připojení' };
     }
@@ -509,7 +345,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const user = users.find(u => u.id === userId);
     if (user) {
         setCurrentUser(user);
-        // Use sessionStorage so it clears when window/tab is closed
         sessionStorage.setItem('ukolnicek_user_id', userId);
     }
   };
@@ -530,33 +365,45 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       await fetchData();
   };
 
+  // --- DATA MUTATION METHODS ---
+
   const addTask = async (task: Task) => {
     const taskWithFamily = { ...task, familyId: familyId! };
     setTasks(prev => [...prev, taskWithFamily]);
-    await supabase.from('tasks').insert(mapTaskToDb(taskWithFamily));
-    fetchData(); 
+    try {
+        await fetch('/api/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(taskWithFamily)
+        });
+        fetchData();
+    } catch (e) {
+        console.error('Error adding task:', e);
+    }
   };
 
   const editTask = async (taskId: string, updates: Partial<Task>) => {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
-    
-    const dbUpdates: any = {};
-    if (updates.title !== undefined) dbUpdates.title = updates.title;
-    if (updates.description !== undefined) dbUpdates.description = updates.description;
-    if (updates.rewardPoints !== undefined) dbUpdates.reward_points = updates.rewardPoints;
-    if (updates.rewardMoney !== undefined) dbUpdates.reward_money = updates.rewardMoney;
-    if (updates.assignedToId !== undefined) dbUpdates.assigned_to_id = updates.assignedToId;
-    if (updates.date !== undefined) dbUpdates.date = updates.date;
-    if (updates.isRecurring !== undefined) dbUpdates.is_recurring = updates.isRecurring;
-    if (updates.recurringFrequency !== undefined) dbUpdates.recurring_frequency = updates.recurringFrequency;
-    if (updates.penalty !== undefined) dbUpdates.penalty = updates.penalty;
-
-    await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
+    try {
+        await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
+    } catch (e) {
+        console.error('Error editing task:', e);
+    }
   };
 
   const deleteTask = async (taskId: string) => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
-    await supabase.from('tasks').delete().eq('id', taskId);
+    try {
+        await fetch(`/api/tasks/${taskId}`, {
+            method: 'DELETE'
+        });
+    } catch (e) {
+        console.error('Error deleting task:', e);
+    }
   };
 
   const calculateNextDate = (currentDate: string, frequency?: RecurringFrequency): string => {
@@ -581,31 +428,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
 
-    const dbUpdates: any = { status };
-    if (proofImageUrl) dbUpdates.proof_image_url = proofImageUrl;
-    if (feedback) dbUpdates.feedback = feedback;
-    if (rewards) {
-        dbUpdates.reward_points = rewards.points;
-        dbUpdates.reward_money = rewards.money;
-    }
+    try {
+        await fetch(`/api/tasks/${taskId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
 
-    await supabase.from('tasks').update(dbUpdates).eq('id', taskId);
-
-    // Recurring logic
-    if (status === TaskStatus.APPROVED && localTask && localTask.isRecurring) {
-        const nextDate = calculateNextDate(localTask.date, localTask.recurringFrequency);
-        const nextTask: Task = {
-            ...localTask,
-            id: Math.random().toString(36).substr(2, 9),
-            familyId: familyId!,
-            date: nextDate,
-            status: TaskStatus.TODO,
-            proofImageUrl: undefined,
-            feedback: undefined,
-        };
-        setTasks(prev => [...prev, nextTask]);
-        await supabase.from('tasks').insert(mapTaskToDb(nextTask));
-        fetchData();
+        // Recurring logic
+        if (status === TaskStatus.APPROVED && localTask && localTask.isRecurring) {
+            const nextDate = calculateNextDate(localTask.date, localTask.recurringFrequency);
+            const nextTask: Task = {
+                ...localTask,
+                id: Math.random().toString(36).substr(2, 9),
+                familyId: familyId!,
+                date: nextDate,
+                status: TaskStatus.TODO,
+                proofImageUrl: undefined,
+                feedback: undefined,
+            };
+            setTasks(prev => [...prev, nextTask]);
+            await fetch('/api/tasks', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nextTask)
+            });
+            fetchData();
+        }
+    } catch (e) {
+        console.error('Error updating task status:', e);
     }
   };
 
@@ -632,7 +483,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev => prev.map(u => u.id === childId ? { ...u, ...updates } : u));
     if (currentUser?.id === childId) setCurrentUser({ ...currentUser, ...updates });
 
-    await supabase.from('users').update(updates).eq('id', childId);
+    try {
+        await fetch(`/api/users/${childId}/points`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ points, money })
+        });
+    } catch (e) {
+        console.error('Error adding points to child:', e);
+    }
   };
 
   const addChild = async (name: string, birthYear?: number) => {
@@ -648,8 +507,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       birthYear
     };
     setUsers(prev => [...prev, newChild]);
-    await supabase.from('users').insert(mapUserToDb(newChild));
-    fetchData();
+    try {
+        await fetch('/api/users', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newChild)
+        });
+        fetchData();
+    } catch (e) {
+        console.error('Error adding child:', e);
+    }
   };
 
   const updateChild = async (id: string, name: string, avatarUrl?: string, pin?: string, birthYear?: number) => {
@@ -662,21 +529,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
     
-    const dbUpdates: any = { name, avatar_url: updates.avatarUrl };
-    if (pin !== undefined) dbUpdates.pin = pin;
-    if (birthYear !== undefined) dbUpdates.birth_year = birthYear;
-
-    const { error } = await supabase.from('users').update(dbUpdates).eq('id', id);
-    if (error) console.error("Update Child Error:", error);
-
     if (currentUser?.id === id) {
         setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
+    }
+
+    try {
+        await fetch(`/api/users/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                name,
+                avatarUrl: updates.avatarUrl,
+                pin,
+                birthYear
+            })
+        });
+    } catch (e) {
+        console.error("Update Child Error:", e);
     }
   };
 
   const deleteChild = async (id: string) => {
     setUsers(prev => prev.filter(u => u.id !== id));
-    await supabase.from('users').delete().eq('id', id);
+    try {
+        await fetch(`/api/users/${id}`, {
+            method: 'DELETE'
+        });
+    } catch (e) {
+        console.error('Error deleting child:', e);
+    }
   };
 
   const processPayout = async (childId: string, note?: string) => {
@@ -698,10 +579,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev => prev.map(u => u.id === childId ? updatedUser : u));
     if (currentUser?.id === childId) setCurrentUser(updatedUser);
 
-    await supabase.from('payout_history').insert(mapPayoutToDb(record));
-
-    await supabase.from('users').update({ balance: 0 }).eq('id', childId);
-    fetchData();
+    try {
+        await fetch(`/api/users/${childId}/payout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ record })
+        });
+        fetchData();
+    } catch (e) {
+        console.error('Payout failed:', e);
+    }
   };
 
   const createWithdrawal = async (childId: string, amount: number, note?: string): Promise<boolean> => {
@@ -720,17 +607,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           type: 'CHILD'
       };
 
-      // Update State
       setPayoutHistory(prev => [record, ...prev]);
       const updatedUser = { ...child, balance: newBalance };
       setUsers(prev => prev.map(u => u.id === childId ? updatedUser : u));
       if (currentUser?.id === childId) setCurrentUser(updatedUser);
 
-      // Update DB
-      await supabase.from('payout_history').insert(mapPayoutToDb(record));
-
-      await supabase.from('users').update({ balance: newBalance }).eq('id', childId);
-      return true;
+      try {
+          const res = await fetch(`/api/users/${childId}/withdrawal`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ record, amount })
+          });
+          return res.ok;
+      } catch (e) {
+          console.error('Withdrawal failed:', e);
+          return false;
+      }
   };
 
   const convertPointsToMoney = async (childId: string, pointsToConvert: number) => {
@@ -742,39 +634,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newPoints = (user.points || 0) - pointsToConvert;
     const newBalance = (user.balance || 0) + moneyToAdd;
     
-    // 1. Update User State & DB
     const updates = { points: newPoints, balance: newBalance };
 
     setUsers(prev => prev.map(u => u.id === childId ? { ...u, ...updates } : u));
     if (currentUser?.id === childId) setCurrentUser({ ...currentUser, ...updates });
 
-    await supabase.from('users').update(updates).eq('id', childId);
-
-    // 2. Create History Record (as a Task)
     const exchangeTask: Task = {
         id: Math.random().toString(36).substr(2, 9),
         familyId: familyId!,
         title: 'Směna bodů',
         description: `Výměna ${pointsToConvert} bodů za ${moneyToAdd} Kč`,
-        rewardPoints: -pointsToConvert, // Negative to show cost in history
+        rewardPoints: -pointsToConvert,
         rewardMoney: moneyToAdd,
         assignedToId: childId,
         date: new Date().toISOString().split('T')[0],
-        status: TaskStatus.APPROVED, // Automatically approved
+        status: TaskStatus.APPROVED,
         createdBy: UserRole.CHILD
     };
 
     setTasks(prev => [...prev, exchangeTask]);
-    await supabase.from('tasks').insert(mapTaskToDb(exchangeTask));
+
+    try {
+        await fetch(`/api/users/${childId}/convert-points`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                pointsToConvert,
+                moneyToAdd,
+                exchangeTask
+            })
+        });
+    } catch (e) {
+        console.error('Points conversion failed:', e);
+    }
   };
 
   const updateUserPin = async (userId: string, pin: string) => {
     try {
-        const { error } = await supabase.from('users').update({ pin }).eq('id', userId);
+        const res = await fetch(`/api/users/${userId}/pin`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ pin })
+        });
+        const data = await res.json();
         
-        if (error) {
-            console.error("Supabase error updating PIN:", error);
-            return { success: false, error: error.message || 'Chyba databáze' };
+        if (!res.ok || !data.success) {
+            return { success: false, error: data.error || 'Chyba databáze' };
         }
 
         setUsers(prev => prev.map(u => u.id === userId ? { ...u, pin } : u));
@@ -793,20 +698,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       try {
           if (!currentUser) return { success: false, error: 'Nejste přihlášen' };
           
-          const dbUpdates: any = { family_name: familyName };
-          if (currentUser.role === UserRole.PARENT) {
-              dbUpdates.email = email;
-              if (password) dbUpdates.password = password;
-          }
-          
-          const { error } = await supabase.from('users').update(dbUpdates).eq('id', currentUser.id);
+          const res = await fetch(`/api/users/${currentUser.id}/profile`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ familyName, email, password })
+          });
+          const data = await res.json();
 
-          if (error) {
-              console.error("Supabase error updating family profile:", error);
-              return { success: false, error: error.message };
+          if (!res.ok || !data.success) {
+              return { success: false, error: data.error || 'Chyba při ukládání.' };
           }
 
-          setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, name: currentUser.name, familyName, email, ...(password && {password}) } : { ...u, familyName }));
+          setUsers(prev => prev.map(u => u.id === currentUser.id ? { ...u, familyName, email, ...(password && {password}) } : { ...u, familyName }));
           await fetchData();
 
           return { success: true };
@@ -817,7 +720,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const setChildAllowance = async (childId: string, settings?: AllowanceSettings) => {
     setUsers(prev => prev.map(u => u.id === childId ? { ...u, allowanceSettings: settings } : u));
-    await supabase.from('users').update({ allowance_settings: settings }).eq('id', childId);
+    try {
+        await fetch(`/api/users/${childId}/allowance`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ allowanceSettings: settings })
+        });
+    } catch (e) {
+        console.error('Error setting child allowance:', e);
+    }
   };
 
   const getAllowanceProgress = (childId: string): AllowanceProgress | null => {
@@ -875,34 +786,47 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const goalWithFamily = { ...goal, familyId: familyId! };
     setGoals(prev => [...prev, goalWithFamily]);
     
-    await supabase.from('goals').insert({
-        id: goalWithFamily.id,
-        family_id: goalWithFamily.familyId,
-        child_id: goalWithFamily.childId,
-        title: goalWithFamily.title,
-        target_amount: goalWithFamily.targetAmount,
-        image_url: goalWithFamily.imageUrl
-    });
-    fetchData();
+    try {
+        await fetch('/api/goals', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: goalWithFamily.id,
+                familyId: goalWithFamily.familyId,
+                childId: goalWithFamily.childId,
+                title: goalWithFamily.title,
+                targetAmount: goalWithFamily.targetAmount,
+                imageUrl: goalWithFamily.imageUrl
+            })
+        });
+        fetchData();
+    } catch (e) {
+        console.error('Error adding goal:', e);
+    }
   };
 
   const updateGoal = async (id: string, updates: Partial<Goal>) => {
     setGoals(prev => prev.map(g => g.id === id ? { ...g, ...updates } : g));
     
-    const dbUpdates: any = {};
-    if (updates.title) dbUpdates.title = updates.title;
-    if (updates.targetAmount) dbUpdates.target_amount = updates.targetAmount;
-    if (updates.imageUrl !== undefined) dbUpdates.image_url = updates.imageUrl;
-
-    await supabase.from('goals').update(dbUpdates).eq('id', id);
+    try {
+        await fetch(`/api/goals/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        });
+    } catch (e) {
+        console.error('Error updating goal:', e);
+    }
   };
 
   const deleteGoal = async (id: string) => {
     try {
-        const { error } = await supabase.from('goals').delete().eq('id', id);
-        if (error) {
-            console.error("Error deleting goal from DB:", error);
-            alert("Chyba při mazání: " + error.message);
+        const res = await fetch(`/api/goals/${id}`, {
+            method: 'DELETE'
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+            console.error("Error deleting goal from DB:", data.error);
             return;
         }
         setGoals(prev => prev.filter(g => g.id !== id));
@@ -929,16 +853,28 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setCurrentUser(prev => prev ? { ...prev, ...updates } : null);
     }
 
-    await supabase.from('users').update({ 
-        points: newPoints, 
-        last_login_reward_date: todayStr 
-    }).eq('id', userId);
-
-    return true;
+    try {
+        await fetch(`/api/users/${userId}/daily-reward`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ points: rewardPoints, dateStr: todayStr })
+        });
+        return true;
+    } catch (e) {
+        console.error('Daily reward failed:', e);
+        return false;
+    }
   };
   
-  const markNotificationRead = (id: string) => {
-      // Placeholder
+  const markNotificationRead = async (id: string) => {
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
+      try {
+          await fetch(`/api/notifications/${id}/read`, {
+              method: 'PUT'
+          });
+      } catch (e) {
+          console.error('Error marking notification read:', e);
+      }
   };
   
   // --- CALENDAR LOGIC ---
@@ -947,22 +883,36 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (!familyId) return;
       setCalendarEvents(prev => [...prev, event]);
       
-      await supabase.from('calendar_events').insert({
-          id: event.id,
-          family_id: familyId,
-          child_id: event.childId,
-          title: event.title,
-          day_index: event.dayIndex,
-          time: event.time,
-          color: event.color,
-          is_recurring: event.isRecurring,
-          specific_date: event.specificDate
-      });
+      try {
+          await fetch('/api/calendar', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  id: event.id,
+                  familyId,
+                  childId: event.childId,
+                  title: event.title,
+                  dayIndex: event.dayIndex,
+                  time: event.time,
+                  color: event.color,
+                  isRecurring: event.isRecurring,
+                  specificDate: event.specificDate
+              })
+          });
+      } catch (e) {
+          console.error('Error adding calendar event:', e);
+      }
   };
 
   const deleteCalendarEvent = async (eventId: string) => {
       setCalendarEvents(prev => prev.filter(e => e.id !== eventId));
-      await supabase.from('calendar_events').delete().eq('id', eventId);
+      try {
+          await fetch(`/api/calendar/${eventId}`, {
+              method: 'DELETE'
+          });
+      } catch (e) {
+          console.error('Error deleting calendar event:', e);
+      }
   };
 
   return (

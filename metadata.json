@@ -3,5 +3,8 @@
   "description": "Motivační aplikace pro děti a rodiče, která mění domácí povinnosti v zábavu a odměny.",
   "requestFramePermissions": [
     "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]
 }
