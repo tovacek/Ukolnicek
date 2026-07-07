@@ -3,7 +3,6 @@ import path from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
-import { createServer as createViteServer } from 'vite';
 
 dotenv.config();
 
@@ -135,7 +134,9 @@ async function bootstrap() {
   }
 }
 
-bootstrap();
+if (!process.env.VERCEL) {
+  bootstrap();
+}
 
 // --- API ROUTES ---
 
@@ -736,6 +737,7 @@ app.put('/api/notifications/:id/read', async (req, res) => {
 // --- VITE MIDDLEWARE SETUP ---
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa'
