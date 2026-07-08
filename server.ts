@@ -32,32 +32,68 @@ app.use(async (req, res, next) => {
   }
 });
 
-// MySQL pool using environment variables or tvacek's dimzone.cz database credentials as fallback
+// Helper to get database connection configuration
+function getDbConfig() {
+  const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+  
+  let host = process.env.DB_HOST || 'dimzone.cz';
+  let user = process.env.DB_USER || 'tvacek';
+  let password = process.env.DB_PASSWORD || 'AdminBarsys';
+  let database = process.env.DB_NAME || 'tvacek';
+  let port = parseInt(process.env.DB_PORT || '3306');
+  
+  if (databaseUrl) {
+    try {
+      const parsed = new URL(databaseUrl);
+      host = parsed.hostname;
+      port = parsed.port ? parseInt(parsed.port) : 3306;
+      user = decodeURIComponent(parsed.username);
+      password = decodeURIComponent(parsed.password);
+      database = parsed.pathname.startsWith('/') ? parsed.pathname.substring(1) : parsed.pathname;
+      console.log(`Parsed Database URL: host=${host}, port=${port}, database=${database}, user=${user}`);
+    } catch (err: any) {
+      console.error('Failed to parse DATABASE_URL, falling back to individual environment variables:', err.message);
+    }
+  }
+
+  // Auto-detect SSL for Cloud providers (like TiDB Cloud, PlanetScale, Aiven, etc.)
+  const isCloudDb = host.includes('tidbcloud.com') || host.includes('tidb') || host.includes('planetscale') || host.includes('aiven');
+  const useSsl = process.env.DB_SSL === 'true' || (process.env.DB_SSL !== 'false' && isCloudDb);
+  const sslConfig = useSsl ? { rejectUnauthorized: true } : undefined;
+
+  return { host, user, password, database, port, ssl: sslConfig };
+}
+
+const dbConfig = getDbConfig();
+
+// MySQL pool using environment variables or fallback values
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'dimzone.cz',
-  user: process.env.DB_USER || 'tvacek',
-  password: process.env.DB_PASSWORD || 'AdminBarsys',
-  database: process.env.DB_NAME || 'tvacek',
-  port: parseInt(process.env.DB_PORT || '3306'),
-  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
+  host: dbConfig.host,
+  user: dbConfig.user,
+  password: dbConfig.password,
+  database: dbConfig.database,
+  port: dbConfig.port,
+  ssl: dbConfig.ssl,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   charset: 'utf8mb4',
-  connectTimeout: 5000 // Fail fast to catch firewall/unreachable errors before Vercel kills the function
+  connectTimeout: 5000 // Fail fast to catch unreachable errors before function timeout
 });
 
 // Bootstrapping the database tables if they do not exist
 async function bootstrap() {
-  const dbName = process.env.DB_NAME || 'tvacek';
+  const config = getDbConfig();
+  const dbName = config.database;
+  
   try {
-    // First, connect without a database specified to ensure the database exists
+    // First, connect without a specific database to ensure the database itself exists
     const tempConnection = await mysql.createConnection({
-      host: process.env.DB_HOST || 'dimzone.cz',
-      user: process.env.DB_USER || 'tvacek',
-      password: process.env.DB_PASSWORD || 'AdminBarsys',
-      port: parseInt(process.env.DB_PORT || '3306'),
-      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
+      host: config.host,
+      user: config.user,
+      password: config.password,
+      port: config.port,
+      ssl: config.ssl,
       connectTimeout: 5000
     });
     
@@ -65,12 +101,12 @@ async function bootstrap() {
       await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
       console.log(`Database '${dbName}' verified/created successfully.`);
     } catch (dbErr: any) {
-      console.warn(`Attempt to create database '${dbName}' failed:`, dbErr.message);
+      console.warn(`Could not CREATE DATABASE '${dbName}' directly (normal if username has restricted privileges):`, dbErr.message);
     } finally {
       await tempConnection.end();
     }
-  } catch (connErr) {
-    console.error('Failed to pre-verify database presence:', connErr);
+  } catch (connErr: any) {
+    console.warn(`Could not connect without database specified to verify database existence:`, connErr.message);
   }
 
   try {
