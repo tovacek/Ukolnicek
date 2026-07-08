@@ -416,7 +416,7 @@ app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   try {
     const [rows]: any = await pool.query(
-      'SELECT family_id FROM ukolnicek_users WHERE email = ? AND password = ? AND role = "PARENT" LIMIT 1',
+      "SELECT family_id FROM ukolnicek_users WHERE email = ? AND password = ? AND role = 'PARENT' LIMIT 1",
       [email, password]
     );
     if (rows.length > 0) {
