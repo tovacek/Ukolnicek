@@ -3,6 +3,7 @@ import path from 'path';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import mysql from 'mysql2/promise';
+import pg from 'pg';
 
 dotenv.config();
 
@@ -12,10 +13,36 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Helper to get database connection configuration pointing ONLY to TiDB Cloud and 'test' database
-function getDbConfig() {
-  const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
+const isPostgres = !!(databaseUrl && (databaseUrl.startsWith('postgres://') || databaseUrl.startsWith('postgresql://')));
+
+console.log(`[Database] Engine auto-detection: ${isPostgres ? 'PostgreSQL (Supabase)' : 'MySQL/TiDB'}`);
+
+// SQL query and schema dialect adapter for running MySQL syntax seamlessly on PostgreSQL (Supabase)
+function convertSql(sql: string): string {
+  if (!isPostgres) return sql;
   
+  // 1. Replace backticks with double quotes for table and column names
+  let converted = sql.replace(/`/g, '"');
+  
+  // 2. Strip MySQL-specific storage engine, charset, and collation configuration
+  converted = converted.replace(/ENGINE\s*=\s*InnoDB/gi, '');
+  converted = converted.replace(/DEFAULT\s*CHARSET\s*=\s*\w+/gi, '');
+  converted = converted.replace(/COLLATE\s*=\s*[\w_]+/gi, '');
+  
+  // 3. Replace MySQL TINYINT with PostgreSQL compatible INT
+  converted = converted.replace(/TINYINT\(\d+\)/gi, 'INT');
+  converted = converted.replace(/TINYINT/gi, 'INT');
+
+  // 4. Translate MySQL "?" placeholders to PostgreSQL "$1", "$2", "$3", etc.
+  let index = 1;
+  converted = converted.replace(/\?/g, () => `$${index++}`);
+  
+  return converted;
+}
+
+// Helper to get database connection configuration pointing ONLY to TiDB Cloud and 'test' database (when not using PG)
+function getDbConfig() {
   // Default values pointing to your TiDB Cloud 'test' database
   let host = 'gateway01.eu-central-1.prod.aws.tidbcloud.com';
   let user = '2gtxXNLHAdaS4rc.root';
@@ -23,7 +50,7 @@ function getDbConfig() {
   let database = 'test';
   let port = 4000;
   
-  if (databaseUrl) {
+  if (databaseUrl && !isPostgres) {
     try {
       const parsed = new URL(databaseUrl);
       host = parsed.hostname;
@@ -44,22 +71,98 @@ function getDbConfig() {
   return { host, user, password, database, port, ssl: sslConfig };
 }
 
-const config = getDbConfig();
+// The unified pool object matching the MySQL promise pool signature
+let pool: any;
 
-// Standard MySQL connection pool
-const pool = mysql.createPool({
-  host: config.host,
-  user: config.user,
-  password: config.password,
-  database: config.database,
-  port: config.port,
-  ssl: config.ssl,
-  waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0,
-  charset: 'utf8mb4',
-  connectTimeout: 5000
-});
+if (isPostgres) {
+  const pgPool = new pg.Pool({
+    connectionString: databaseUrl,
+    ssl: {
+      rejectUnauthorized: false // Necessary for connection to Supabase in serverless/cloud environments
+    }
+  });
+
+  pool = {
+    async query(sql: string, params: any[] = []) {
+      const convertedSql = convertSql(sql);
+      try {
+        const res = await pgPool.query(convertedSql, params);
+        return [res.rows, null];
+      } catch (err: any) {
+        console.error(`PostgreSQL Query Error: ${err.message}\nOriginal SQL: ${sql}\nConverted SQL: ${convertedSql}`);
+        throw err;
+      }
+    },
+    async getConnection() {
+      const client = await pgPool.connect();
+      return {
+        async query(sql: string, params: any[] = []) {
+          const convertedSql = convertSql(sql);
+          try {
+            const res = await client.query(convertedSql, params);
+            return [res.rows, null];
+          } catch (err: any) {
+            console.error(`PostgreSQL Transaction Query Error: ${err.message}\nOriginal SQL: ${sql}\nConverted SQL: ${convertedSql}`);
+            throw err;
+          }
+        },
+        async beginTransaction() {
+          await client.query('BEGIN');
+        },
+        async commit() {
+          await client.query('COMMIT');
+        },
+        async rollback() {
+          await client.query('ROLLBACK');
+        },
+        release() {
+          client.release();
+        }
+      };
+    }
+  };
+} else {
+  const config = getDbConfig();
+  const mysqlPool = mysql.createPool({
+    host: config.host,
+    user: config.user,
+    password: config.password,
+    database: config.database,
+    port: config.port,
+    ssl: config.ssl,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    charset: 'utf8mb4',
+    connectTimeout: 5000
+  });
+
+  pool = {
+    async query(sql: string, params: any[] = []) {
+      return await mysqlPool.query(sql, params);
+    },
+    async getConnection() {
+      const conn = await mysqlPool.getConnection();
+      return {
+        async query(sql: string, params: any[] = []) {
+          return await conn.query(sql, params);
+        },
+        async beginTransaction() {
+          await conn.beginTransaction();
+        },
+        async commit() {
+          await conn.commit();
+        },
+        async rollback() {
+          await conn.rollback();
+        },
+        release() {
+          conn.release();
+        }
+      };
+    }
+  };
+}
 
 // A robust lazy bootstrapping mechanism to ensure tables are created once upon first API usage
 let tablesBootstrapped = false;
@@ -71,7 +174,7 @@ async function ensureTables() {
 
   bootstrapPromise = (async () => {
     try {
-      console.log('Ensuring tables exist in TiDB test database...');
+      console.log(`Ensuring tables exist in ${isPostgres ? 'Supabase/PostgreSQL' : 'TiDB/MySQL'} database...`);
       // 1. users table
       await pool.query(`
         CREATE TABLE IF NOT EXISTS ukolnicek_users (
