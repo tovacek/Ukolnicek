@@ -12,20 +12,67 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// MySQL pool using tvacek's dimzone.cz database credentials
+// On-demand database and table bootstrapping middleware
+let bootstrapPromise: Promise<void> | null = null;
+function ensureBootstrapped() {
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrap();
+  }
+  return bootstrapPromise;
+}
+
+app.use(async (req, res, next) => {
+  // Exclude health check from blocking on DB bootstrap if needed, or keep it to verify db is ready
+  try {
+    await ensureBootstrapped();
+    next();
+  } catch (err: any) {
+    console.error('Database bootstrap failed in middleware:', err);
+    next(); // Proceed anyway, routes will handle the DB connection error gracefully
+  }
+});
+
+// MySQL pool using environment variables or tvacek's dimzone.cz database credentials as fallback
 const pool = mysql.createPool({
-  host: 'dimzone.cz',
-  user: 'tvacek',
-  password: 'AdminBarsys',
-  database: 'tvacek',
+  host: process.env.DB_HOST || 'dimzone.cz',
+  user: process.env.DB_USER || 'tvacek',
+  password: process.env.DB_PASSWORD || 'AdminBarsys',
+  database: process.env.DB_NAME || 'tvacek',
+  port: parseInt(process.env.DB_PORT || '3306'),
+  ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
-  charset: 'utf8mb4'
+  charset: 'utf8mb4',
+  connectTimeout: 5000 // Fail fast to catch firewall/unreachable errors before Vercel kills the function
 });
 
 // Bootstrapping the database tables if they do not exist
 async function bootstrap() {
+  const dbName = process.env.DB_NAME || 'tvacek';
+  try {
+    // First, connect without a database specified to ensure the database exists
+    const tempConnection = await mysql.createConnection({
+      host: process.env.DB_HOST || 'dimzone.cz',
+      user: process.env.DB_USER || 'tvacek',
+      password: process.env.DB_PASSWORD || 'AdminBarsys',
+      port: parseInt(process.env.DB_PORT || '3306'),
+      ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: true } : undefined,
+      connectTimeout: 5000
+    });
+    
+    try {
+      await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
+      console.log(`Database '${dbName}' verified/created successfully.`);
+    } catch (dbErr: any) {
+      console.warn(`Attempt to create database '${dbName}' failed:`, dbErr.message);
+    } finally {
+      await tempConnection.end();
+    }
+  } catch (connErr) {
+    console.error('Failed to pre-verify database presence:', connErr);
+  }
+
   try {
     const connection = await pool.getConnection();
     try {
@@ -132,10 +179,6 @@ async function bootstrap() {
   } catch (err) {
     console.error('Database connection / bootstrapping failed:', err);
   }
-}
-
-if (!process.env.VERCEL) {
-  bootstrap();
 }
 
 // --- API ROUTES ---
