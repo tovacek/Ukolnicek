@@ -12,108 +12,68 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// On-demand database and table bootstrapping middleware
-let bootstrapPromise: Promise<void> | null = null;
-function ensureBootstrapped() {
-  if (!bootstrapPromise) {
-    bootstrapPromise = bootstrap();
-  }
-  return bootstrapPromise;
-}
-
-app.use(async (req, res, next) => {
-  // Exclude health check from blocking on DB bootstrap if needed, or keep it to verify db is ready
-  try {
-    await ensureBootstrapped();
-    next();
-  } catch (err: any) {
-    console.error('Database bootstrap failed in middleware:', err);
-    next(); // Proceed anyway, routes will handle the DB connection error gracefully
-  }
-});
-
-// Helper to get database connection configuration
+// Helper to get database connection configuration pointing ONLY to TiDB Cloud and 'test' database
 function getDbConfig() {
   const databaseUrl = process.env.DATABASE_URL || process.env.MYSQL_URL;
   
-  let host = process.env.DB_HOST || 'dimzone.cz';
-  let user = process.env.DB_USER || 'tvacek';
-  let password = process.env.DB_PASSWORD || 'AdminBarsys';
-  let database = process.env.DB_NAME || 'tvacek';
-  let port = parseInt(process.env.DB_PORT || '3306');
+  // Default values pointing to your TiDB Cloud 'test' database
+  let host = 'gateway01.eu-central-1.prod.aws.tidbcloud.com';
+  let user = '2gtxXNLHAdaS4rc.root';
+  let password = 'Qz62yWzHH8Ii7KIP';
+  let database = 'test';
+  let port = 4000;
   
   if (databaseUrl) {
     try {
       const parsed = new URL(databaseUrl);
       host = parsed.hostname;
-      port = parsed.port ? parseInt(parsed.port) : 3306;
+      port = parsed.port ? parseInt(parsed.port) : 4000;
       user = decodeURIComponent(parsed.username);
       password = decodeURIComponent(parsed.password);
-      database = parsed.pathname.startsWith('/') ? parsed.pathname.substring(1) : parsed.pathname;
+      // Force database to 'test' to avoid permission issues when creating custom databases
+      database = 'test';
       console.log(`Parsed Database URL: host=${host}, port=${port}, database=${database}, user=${user}`);
     } catch (err: any) {
-      console.error('Failed to parse DATABASE_URL, falling back to individual environment variables:', err.message);
+      console.error('Failed to parse DATABASE_URL, using default TiDB connection:', err.message);
     }
   }
 
-  // Auto-detect SSL for Cloud providers (like TiDB Cloud, PlanetScale, Aiven, etc.)
-  const isCloudDb = host.includes('tidbcloud.com') || host.includes('tidb') || host.includes('planetscale') || host.includes('aiven');
-  const useSsl = process.env.DB_SSL === 'true' || (process.env.DB_SSL !== 'false' && isCloudDb);
-  const sslConfig = useSsl ? { rejectUnauthorized: true } : undefined;
+  // Always enable SSL with min TLS 1.2 for secure TiDB connections
+  const sslConfig = { minVersion: 'TLSv1.2', rejectUnauthorized: true };
 
   return { host, user, password, database, port, ssl: sslConfig };
 }
 
-const dbConfig = getDbConfig();
+const config = getDbConfig();
 
-// MySQL pool using environment variables or fallback values
+// Standard MySQL connection pool
 const pool = mysql.createPool({
-  host: dbConfig.host,
-  user: dbConfig.user,
-  password: dbConfig.password,
-  database: dbConfig.database,
-  port: dbConfig.port,
-  ssl: dbConfig.ssl,
+  host: config.host,
+  user: config.user,
+  password: config.password,
+  database: config.database,
+  port: config.port,
+  ssl: config.ssl,
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0,
   charset: 'utf8mb4',
-  connectTimeout: 5000 // Fail fast to catch unreachable errors before function timeout
+  connectTimeout: 5000
 });
 
-// Bootstrapping the database tables if they do not exist
-async function bootstrap() {
-  const config = getDbConfig();
-  const dbName = config.database;
-  
-  try {
-    // First, connect without a specific database to ensure the database itself exists
-    const tempConnection = await mysql.createConnection({
-      host: config.host,
-      user: config.user,
-      password: config.password,
-      port: config.port,
-      ssl: config.ssl,
-      connectTimeout: 5000
-    });
-    
-    try {
-      await tempConnection.query(`CREATE DATABASE IF NOT EXISTS \`${dbName}\`;`);
-      console.log(`Database '${dbName}' verified/created successfully.`);
-    } catch (dbErr: any) {
-      console.warn(`Could not CREATE DATABASE '${dbName}' directly (normal if username has restricted privileges):`, dbErr.message);
-    } finally {
-      await tempConnection.end();
-    }
-  } catch (connErr: any) {
-    console.warn(`Could not connect without database specified to verify database existence:`, connErr.message);
-  }
+// A robust lazy bootstrapping mechanism to ensure tables are created once upon first API usage
+let tablesBootstrapped = false;
+let bootstrapPromise: Promise<void> | null = null;
 
-  try {
-    const connection = await pool.getConnection();
+async function ensureTables() {
+  if (tablesBootstrapped) return;
+  if (bootstrapPromise) return bootstrapPromise;
+
+  bootstrapPromise = (async () => {
     try {
+      console.log('Ensuring tables exist in TiDB test database...');
       // 1. users table
-      await connection.query(`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS ukolnicek_users (
           id VARCHAR(50) PRIMARY KEY,
           family_id VARCHAR(50) NULL,
@@ -135,7 +95,7 @@ async function bootstrap() {
       `);
 
       // 2. tasks table
-      await connection.query(`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS ukolnicek_tasks (
           id VARCHAR(50) PRIMARY KEY,
           family_id VARCHAR(50) NULL,
@@ -156,7 +116,7 @@ async function bootstrap() {
       `);
 
       // 3. payout_history table
-      await connection.query(`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS ukolnicek_payout_history (
           id VARCHAR(50) PRIMARY KEY,
           family_id VARCHAR(50) NULL,
@@ -169,7 +129,7 @@ async function bootstrap() {
       `);
 
       // 4. goals table
-      await connection.query(`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS ukolnicek_goals (
           id VARCHAR(50) PRIMARY KEY,
           family_id VARCHAR(50) NULL,
@@ -181,7 +141,7 @@ async function bootstrap() {
       `);
 
       // 5. calendar_events table
-      await connection.query(`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS ukolnicek_calendar_events (
           id VARCHAR(50) PRIMARY KEY,
           family_id VARCHAR(50) NULL,
@@ -196,7 +156,7 @@ async function bootstrap() {
       `);
 
       // 6. notifications table
-      await connection.query(`
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS ukolnicek_notifications (
           id VARCHAR(50) PRIMARY KEY,
           family_id VARCHAR(50) NULL,
@@ -208,14 +168,30 @@ async function bootstrap() {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
       `);
 
+      tablesBootstrapped = true;
       console.log('Database tables verified/bootstrapped successfully with ukolnicek_ prefix.');
-    } finally {
-      connection.release();
+    } catch (err: any) {
+      console.error('Database tables bootstrapping failed:', err.message);
+      bootstrapPromise = null; // Allow retry on next request
     }
-  } catch (err) {
-    console.error('Database connection / bootstrapping failed:', err);
-  }
+  })();
+
+  return bootstrapPromise;
 }
+
+// Request middleware to ensure tables exist before handling API operations
+app.use(async (req, res, next) => {
+  if (req.path === '/api/health') {
+    return next();
+  }
+  try {
+    await ensureTables();
+    next();
+  } catch (err: any) {
+    console.error('Database bootstrap failed in middleware:', err);
+    next(); // Proceed anyway, routes will handle the DB connection error gracefully
+  }
+});
 
 // --- API ROUTES ---
 
